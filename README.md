@@ -1,6 +1,7 @@
 # App Foundry
 
 [![CI](https://github.com/thedjpetersen/app-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/thedjpetersen/app-foundry/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-2648c4)](https://thedjpetersen.github.io/app-foundry/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0d8626.svg)](LICENSE)
 
 App Foundry is a design-system-neutral application framework for products made from independently developed App Modules.
@@ -17,7 +18,7 @@ App Foundry settles recurring platform choices before an app asks a model to imp
 
 The result is disposable leverage: teams can bootstrap an app, collaborate through stable contracts, learn from it, and replace it without replacing the platform.
 
-Read the full [Motivation](docs/motivation.md).
+Read the full [Motivation](https://thedjpetersen.github.io/app-foundry/motivation/).
 
 ## Responsibility Boundary
 
@@ -108,7 +109,7 @@ Supported UI kits:
 - [AstryxKit](https://github.com/thedjpetersen/astryxkit) renders the seam with the Astryx design system.
 - LedgerKit renders the seam with an independent editorial Tailwind and Radix language.
 
-See [Presentation Seam](docs/presentation-seam.md) for the contract and ownership rules.
+See [Presentation Seam](https://thedjpetersen.github.io/app-foundry/presentation/) for the contract and ownership rules.
 
 ## Neutral Generators
 
@@ -118,14 +119,16 @@ App Foundry supplies naming and filesystem safety. A UI kit supplies branded rec
 import { runGenerator, toNameParts } from "app-foundry/generator";
 ```
 
-See [Generator Engine](docs/generators.md).
+See [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/).
 
 ## Documentation
 
-- [Motivation](docs/motivation.md)
-- [Architecture](docs/architecture.md)
-- [Presentation Seam](docs/presentation-seam.md)
-- [Generator Engine](docs/generators.md)
+- [Documentation site](https://thedjpetersen.github.io/app-foundry/)
+- [Motivation](https://thedjpetersen.github.io/app-foundry/motivation/)
+- [Architecture](https://thedjpetersen.github.io/app-foundry/architecture/)
+- [Contracts](https://thedjpetersen.github.io/app-foundry/contracts/)
+- [Presentation Seam](https://thedjpetersen.github.io/app-foundry/presentation/)
+- [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/)
 
 ## Development
 
@@ -135,7 +138,7 @@ npm run validate
 npm pack --dry-run
 ```
 
-`npm run validate` type-checks and builds every public export. The repository CI runs the same gate on pushes and pull requests.
+`npm run validate` type-checks and builds every public export, builds the docs site, checks internal links, and verifies core light/dark contrast pairs.
 
 ## License
 
