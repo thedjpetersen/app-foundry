@@ -2,6 +2,10 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
+import {
+  collectExportedSymbols,
+  parseAnnotatedSections,
+} from "./annotated.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const output = path.join(root, "site", "dist");
@@ -10,7 +14,7 @@ const baseUrl = normalizeBaseUrl(
 );
 const siteUrl = "https://thedjpetersen.github.io/app-foundry/";
 
-const pages = [
+const documentationPages = [
   {
     slug: "",
     source: "docs/index.md",
@@ -61,6 +65,46 @@ const pages = [
   },
 ];
 
+const sourceLanding = {
+  slug: "source",
+  source: "docs/source.md",
+  label: "Source",
+  eyebrow: "Annotated implementation",
+  description:
+    "Commentary and repository source rendered together at the public framework boundary.",
+};
+
+const sourceModules = [
+  module("core-host", "app-foundry/core", "src/core/host.ts", "Host lifecycle", "Manifest registration, activation, navigation, disposal, and workspace aggregation."),
+  module("core-shell-sdk", "app-foundry/core", "src/core/shell-sdk.ts", "Shell SDK", "Commands, context, events, preferences, and disposable collaboration state."),
+  module("core-access-control", "app-foundry/core", "src/core/access-control.ts", "Access control", "Capability declarations, grants, requirements, and access decisions."),
+  module("core-entities", "app-foundry/core", "src/core/entities.ts", "Workspace entities", "Cross-module entity kinds, sources, aggregation, mentions, and references."),
+  module("core-importmap", "app-foundry/core", "src/core/importmap.ts", "Import maps", "Import-map generation and installation for independently shipped modules."),
+  module("react-presentation-adapter", "app-foundry/react", "src/react/presentation-adapter.ts", "Presentation adapter", "The feature-level frame, palette, preferences, outlet, and error-boundary seam."),
+  module("react-frame-model", "app-foundry/react", "src/react/frame-model.ts", "Frame model", "Headless navigation and shell state consumed by a presentation adapter."),
+  module("react-command-palette-model", "app-foundry/react", "src/react/command-palette-model.ts", "Command palette model", "Presentation-neutral command search, selection, and execution state."),
+  module("react-preferences-model", "app-foundry/react", "src/react/preferences-model.ts", "Preferences model", "Headless grouped settings and resolved-source inspection."),
+  module("react-app-runtime", "app-foundry/react", "src/react/app-runtime.tsx", "App runtime", "React bindings for activating, rendering, and disposing App Modules."),
+  module("worker-http", "app-foundry/worker", "src/worker/http.ts", "HTTP helpers", "Explicit routes, JSON responses, request parsing, health, and asset fallbacks."),
+  module("worker-access-guard", "app-foundry/worker", "src/worker/access-guard.ts", "Access guard", "Request-bound capability checks and denied-response behavior."),
+  module("worker-d1", "app-foundry/worker", "src/worker/d1.ts", "D1 helpers", "Binding guards, prepared statements, and small batch helpers."),
+  module("worker-short-links", "app-foundry/worker", "src/worker/short-links.ts", "Short links", "Unbiased short-code generation and redirect-route composition."),
+  module("generator", "app-foundry/generator", "src/generator/index.ts", "Generator engine", "Naming, path containment, overwrite protection, dry runs, and deterministic writes."),
+];
+
+const sourcePages = sourceModules.map((item) => ({
+  ...item,
+  kind: "source",
+  slug: `source/${item.id}`,
+  source: item.path,
+  eyebrow: item.surface,
+}));
+const pages = [...documentationPages, sourceLanding, ...sourcePages];
+const primaryNavigation = [
+  ...documentationPages.slice(0, 5),
+  sourceLanding,
+];
+
 await rm(output, { recursive: true, force: true });
 await mkdir(path.join(output, "assets"), { recursive: true });
 
@@ -69,9 +113,10 @@ await writeFile(path.join(output, "assets", "styles.css"), stylesheet);
 await writeFile(path.join(output, ".nojekyll"), "");
 
 for (const page of pages) {
-  const markdown = await readFile(path.join(root, page.source), "utf8");
-  const headings = collectHeadings(markdown);
-  const content = addHeadingAnchors(await marked.parse(markdown), headings);
+  const { content, headings } =
+    page.kind === "source"
+      ? await buildAnnotatedSource(page)
+      : await buildMarkdownPage(page);
   const destination = page.slug
     ? path.join(output, page.slug, "index.html")
     : path.join(output, "index.html");
@@ -81,9 +126,17 @@ for (const page of pages) {
 }
 
 await writeFile(
+  path.join(output, "pages.json"),
+  JSON.stringify(
+    pages.map((page) => ({ slug: page.slug, source: page.source })),
+    null,
+    2,
+  ),
+);
+await writeFile(
   path.join(output, "sitemap.xml"),
   `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/sitemap/0.9">
 ${pages
   .map(
     (page) =>
@@ -94,12 +147,45 @@ ${pages
 `,
 );
 
-console.log(`Built ${pages.length} App Foundry documentation pages.`);
+console.log(
+  `Built ${documentationPages.length + 1} guides and ${sourcePages.length} annotated source pages.`,
+);
+
+async function buildMarkdownPage(page) {
+  const markdown = await readFile(path.join(root, page.source), "utf8");
+  const headings = collectHeadings(markdown);
+  let content = addHeadingAnchors(await marked.parse(markdown), headings);
+
+  if (page.slug === sourceLanding.slug) {
+    content += renderSourceIndex();
+  }
+
+  return { content, headings };
+}
+
+async function buildAnnotatedSource(page) {
+  const raw = await readFile(path.join(root, page.path), "utf8");
+  const symbols = collectExportedSymbols(raw);
+  const sections = parseAnnotatedSections(raw);
+  const headings = symbols.map((symbol) => ({
+    id: `L${symbol.line}`,
+    label: symbol.name,
+  }));
+
+  return {
+    headings,
+    content: renderAnnotatedSource(page, sections, symbols),
+  };
+}
 
 function renderPage(page, content, headings) {
   const title = page.slug ? `${page.label} · App Foundry` : "App Foundry Docs";
   const canonical = `${siteUrl}${page.slug ? `${page.slug}/` : ""}`;
   const pagePath = `${baseUrl}${page.slug ? `${page.slug}/` : ""}`;
+  const isSource = page.kind === "source";
+  const repositoryLink = isSource
+    ? `https://github.com/thedjpetersen/app-foundry/blob/main/${page.source}`
+    : `https://github.com/thedjpetersen/app-foundry/edit/main/${page.source}`;
 
   return `<!doctype html>
 <html lang="en">
@@ -121,41 +207,27 @@ function renderPage(page, content, headings) {
         <span class="brand-copy"><strong>App Foundry</strong><small>Framework docs</small></span>
       </a>
       <nav class="topnav" aria-label="Primary documentation">
-        ${pages
-          .slice(0, 5)
-          .map((item) => renderTopNavItem(item, page))
-          .join("")}
+        ${primaryNavigation.map((item) => renderTopNavItem(item, page)).join("")}
       </nav>
       <a class="github-link" href="https://github.com/thedjpetersen/app-foundry">GitHub <span aria-hidden="true">↗</span></a>
     </header>
-    <section class="docs-layout">
+    <section class="docs-layout${isSource ? " has-source" : ""}">
       <aside class="sidebar" aria-label="Documentation sections">
-        <p class="sidebar-label">Documentation</p>
-        <nav>
-          ${pages.map((item, index) => renderSideNavItem(item, page, index)).join("")}
-        </nav>
-        <section class="boundary-note">
-          <strong>Framework boundary</strong>
-          <p>Contracts and orchestration live here. Components and visual language live in a selected UI kit.</p>
-        </section>
+        ${renderSidebar(page)}
       </aside>
-      <main id="content" class="content" data-page="${escapeHtml(page.slug || "overview")}">
-        <header class="page-intro">
-          <p class="eyebrow">${escapeHtml(page.eyebrow)}</p>
-          <p class="page-summary">${escapeHtml(page.description)}</p>
-          <p class="page-location"><span>app-foundry</span><span aria-hidden="true">/</span><strong>${escapeHtml(page.slug || "overview")}</strong></p>
-        </header>
-        <article class="prose">${content}</article>
+      <main id="content" class="content${isSource ? " source-content" : ""}" data-page="${escapeHtml(page.slug || "overview")}">
+        ${isSource ? "" : renderPageIntro(page)}
+        ${isSource ? content : `<article class="prose">${content}</article>`}
         <nav class="page-turn" aria-label="Continue reading">
           ${renderPageTurn(page)}
         </nav>
       </main>
       <aside class="toc" aria-label="On this page">
-        <p>On this page</p>
+        <p>${isSource ? "Exported symbols" : "On this page"}</p>
         <nav>${headings
           .map((heading) => `<a href="#${heading.id}">${escapeHtml(heading.label)}</a>`)
           .join("")}</nav>
-        <a class="edit-link" href="https://github.com/thedjpetersen/app-foundry/edit/main/${page.source}">Edit this page <span aria-hidden="true">↗</span></a>
+        <a class="edit-link" href="${repositoryLink}">${isSource ? "View source" : "Edit this page"} <span aria-hidden="true">↗</span></a>
       </aside>
     </section>
     <footer class="footer">
@@ -167,23 +239,56 @@ function renderPage(page, content, headings) {
 `;
 }
 
-function renderTopNavItem(item, current) {
-  const active = item.slug === current.slug;
-  return `<a href="${baseUrl}${item.slug ? `${item.slug}/` : ""}"${active ? ' aria-current="page"' : ""}>${escapeHtml(item.label)}</a>`;
+function renderPageIntro(page) {
+  return `<header class="page-intro">
+    <p class="eyebrow">${escapeHtml(page.eyebrow)}</p>
+    <p class="page-summary">${escapeHtml(page.description)}</p>
+    <p class="page-location"><span>app-foundry</span><span aria-hidden="true">/</span><strong>${escapeHtml(page.slug || "overview")}</strong></p>
+  </header>`;
 }
 
-function renderSideNavItem(item, current, index) {
+function renderSidebar(current) {
+  return `${renderSidebarGroup("Start", documentationPages.slice(0, 2), current)}
+    ${renderSidebarGroup("Framework", documentationPages.slice(2), current)}
+    ${renderSidebarGroup("Source", [sourceLanding, ...sourcePages], current, true)}
+    <section class="boundary-note">
+      <strong>Framework boundary</strong>
+      <p>Contracts and orchestration live here. Components and visual language live in a selected UI kit.</p>
+    </section>`;
+}
+
+function renderSidebarGroup(label, items, current, compact = false) {
+  return `<section class="sidebar-group">
+    <p class="sidebar-label">${label}</p>
+    <nav>${items.map((item) => renderSideNavItem(item, current, compact)).join("")}</nav>
+  </section>`;
+}
+
+function renderTopNavItem(item, current) {
+  const active =
+    item.slug === current.slug ||
+    (item.slug === sourceLanding.slug && current.slug.startsWith("source/"));
+  return `<a href="${pageHref(item)}"${active ? ' aria-current="page"' : ""}>${escapeHtml(item.label)}</a>`;
+}
+
+function renderSideNavItem(item, current, compact) {
   const active = item.slug === current.slug;
-  return `<a class="sidebar-item" href="${baseUrl}${item.slug ? `${item.slug}/` : ""}"${active ? ' aria-current="page"' : ""}>
-    <span class="nav-index">0${index + 1}</span>
-    <span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)}</small></span>
+  const glyph = item.kind === "source" ? "▥" : item.slug === "source" ? "⌘" : "›";
+  return `<a class="sidebar-item${compact ? " compact" : ""}" href="${pageHref(item)}"${active ? ' aria-current="page"' : ""}>
+    <span class="nav-glyph" aria-hidden="true">${glyph}</span>
+    <span><strong>${escapeHtml(item.label)}</strong>${compact ? "" : `<small>${escapeHtml(item.description)}</small>`}</span>
   </a>`;
 }
 
 function renderPageTurn(current) {
-  const index = pages.findIndex((page) => page.slug === current.slug);
-  const previous = pages[index - 1];
-  const next = pages[index + 1];
+  const sequence = current.kind === "source" ? sourcePages : [...documentationPages, sourceLanding];
+  const index = sequence.findIndex((page) => page.slug === current.slug);
+  const previous = sequence[index - 1];
+  const next = sequence[index + 1];
+
+  if (index < 0) {
+    return "<span></span><span></span>";
+  }
 
   return `${previous ? renderTurnLink(previous, "Previous") : "<span></span>"}${
     next ? renderTurnLink(next, "Next") : "<span></span>"
@@ -191,7 +296,71 @@ function renderPageTurn(current) {
 }
 
 function renderTurnLink(page, direction) {
-  return `<a href="${baseUrl}${page.slug ? `${page.slug}/` : ""}"><small>${direction}</small><strong>${escapeHtml(page.label)} ${direction === "Next" ? "→" : "←"}</strong></a>`;
+  return `<a href="${pageHref(page)}"><small>${direction}</small><strong>${escapeHtml(page.label)} ${direction === "Next" ? "→" : "←"}</strong></a>`;
+}
+
+function renderSourceIndex() {
+  const groups = Map.groupBy(sourcePages, (page) => page.surface);
+
+  return `<section class="source-index" aria-label="Annotated modules">
+    ${[...groups.entries()]
+      .map(
+        ([surface, modules]) => `<section class="source-group">
+          <h2 id="${slugify(surface)}">${escapeHtml(surface)}</h2>
+          <ul>${modules
+            .map(
+              (item) => `<li><a href="${pageHref(item)}"><code>${escapeHtml(item.path)}</code><span>${escapeHtml(item.description)}</span><b aria-hidden="true">→</b></a></li>`,
+            )
+            .join("")}</ul>
+        </section>`,
+      )
+      .join("")}
+  </section>`;
+}
+
+function renderAnnotatedSource(page, sections, symbols) {
+  return `<article class="annotated-page">
+    <header class="annotated-header">
+      <p class="eyebrow">${escapeHtml(page.surface)}</p>
+      <h1>${escapeHtml(path.basename(page.path))}</h1>
+      <p>${escapeHtml(page.description)}</p>
+      <section class="source-meta"><code>${escapeHtml(page.path)}</code><a href="https://github.com/thedjpetersen/app-foundry/blob/main/${page.path}">View on GitHub ↗</a></section>
+      ${symbols.length > 0 ? `<nav class="symbol-list" aria-label="Exported symbols">${symbols.map((symbol) => `<a href="#L${symbol.line}">${escapeHtml(symbol.name)}</a>`).join("")}</nav>` : ""}
+    </header>
+    <ol class="annotated-sections">
+      ${sections.map((section) => renderAnnotatedSection(section)).join("")}
+    </ol>
+  </article>`;
+}
+
+function renderAnnotatedSection(section) {
+  return `<li class="annotated-row">
+    <aside class="annotation-cell">${section.annotation.map((paragraph) => `<p>${renderInlineCode(paragraph)}</p>`).join("")}</aside>
+    <section class="source-code-cell"><pre><code>${renderCodeLines(section.code, section.startLine)}</code></pre></section>
+  </li>`;
+}
+
+function renderCodeLines(code, startLine) {
+  if (!code) {
+    return "";
+  }
+
+  return code
+    .split("\n")
+    .map((line, index) => {
+      const lineNumber = startLine + index;
+      return `<span class="code-line" id="L${lineNumber}"><a href="#L${lineNumber}" aria-label="Line ${lineNumber}">${lineNumber}</a><span>${escapeHtml(line) || " "}</span></span>`;
+    })
+    .join("\n");
+}
+
+function renderInlineCode(value) {
+  return value
+    .split(/`([^`]+)`/g)
+    .map((part, index) =>
+      index % 2 === 1 ? `<code>${escapeHtml(part)}</code>` : escapeHtml(part),
+    )
+    .join("");
 }
 
 function collectHeadings(markdown) {
@@ -203,13 +372,20 @@ function collectHeadings(markdown) {
 
 function addHeadingAnchors(html, headings) {
   let index = 0;
-
   return html.replace(/<h2>(.*?)<\/h2>/g, (_, body) => {
     const heading = headings[index++];
     return heading
       ? `<h2 id="${heading.id}">${body}<a class="heading-anchor" href="#${heading.id}" aria-label="Link to ${escapeHtml(heading.label)}">#</a></h2>`
       : `<h2>${body}</h2>`;
   });
+}
+
+function module(id, surface, modulePath, label, description) {
+  return { id, surface, path: modulePath, label, description };
+}
+
+function pageHref(page) {
+  return `${baseUrl}${page.slug ? `${page.slug}/` : ""}`;
 }
 
 function normalizeBaseUrl(value) {

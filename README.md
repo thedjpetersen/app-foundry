@@ -129,6 +129,7 @@ See [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/).
 - [Contracts](https://thedjpetersen.github.io/app-foundry/contracts/)
 - [Presentation Seam](https://thedjpetersen.github.io/app-foundry/presentation/)
 - [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/)
+- [Annotated source](https://thedjpetersen.github.io/app-foundry/source/) — architectural commentary beside the public implementation
 
 ## Development
 

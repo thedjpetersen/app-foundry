@@ -70,4 +70,4 @@ The manifest is available before module code loads. Navigation, search, settings
 
 ## Continue through the system
 
-Read [Architecture](./architecture/) for ownership, [Contracts](./contracts/) for collaboration, and [Presentation Seam](./presentation/) for replaceable UI.
+Read [Architecture](./architecture/) for ownership, [Contracts](./contracts/) for collaboration, and [Presentation Seam](./presentation/) for replaceable UI. Then follow the contracts into the [annotated source](./source/), where the architectural commentary stays beside the public implementation.

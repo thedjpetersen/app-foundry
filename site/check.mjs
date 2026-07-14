@@ -4,22 +4,40 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const output = path.join(root, "site", "dist");
-const pagePaths = [
-  "index.html",
-  "motivation/index.html",
-  "architecture/index.html",
-  "contracts/index.html",
-  "presentation/index.html",
-  "generators/index.html",
-];
+const pages = JSON.parse(
+  await readFile(path.join(output, "pages.json"), "utf8"),
+);
+const pagePaths = pages.map(({ slug }) =>
+  slug === "" ? "index.html" : `${slug}/index.html`,
+);
 const expectedTargets = new Set(pagePaths);
+const sourcePaths = pagePaths.filter((pagePath) =>
+  pagePath.startsWith("source/") && pagePath !== "source/index.html",
+);
+
+if (sourcePaths.length < 15) {
+  throw new Error(
+    `Expected at least 15 annotated source pages, found ${sourcePaths.length}`,
+  );
+}
 
 for (const pagePath of pagePaths) {
   const html = await readFile(path.join(output, pagePath), "utf8");
+  const isAnnotatedSource = sourcePaths.includes(pagePath);
+  const required = isAnnotatedSource
+    ? [
+        "<main",
+        "<h1>",
+        "Exported symbols",
+        "annotated-page",
+        "code-line",
+        "Framework boundary",
+      ]
+    : ["<main", "<h1>", "On this page", "Framework boundary"];
 
-  for (const required of ["<main", "<h1>", "On this page", "Framework boundary"]) {
-    if (!html.includes(required)) {
-      throw new Error(`${pagePath} is missing ${required}`);
+  for (const marker of required) {
+    if (!html.includes(marker)) {
+      throw new Error(`${pagePath} is missing ${marker}`);
     }
   }
 
@@ -40,6 +58,8 @@ const contrastPairs = [
   ["#f4f6fb", "#171a21", "dark primary text"],
   ["#aeb6c7", "#171a21", "dark secondary text"],
   ["#a9bbff", "#171a21", "dark links"],
+  ["#f4f6fb", "#1a2652", "annotated source code"],
+  ["#b9c7f5", "#1a2652", "annotated source line numbers"],
 ];
 
 for (const [foreground, background, label] of contrastPairs) {
@@ -51,7 +71,7 @@ for (const [foreground, background, label] of contrastPairs) {
 }
 
 console.log(
-  `Checked ${pagePaths.length} pages, internal navigation, and ${contrastPairs.length} contrast pairs.`,
+  `Checked ${pagePaths.length} pages, ${sourcePaths.length} annotated modules, internal navigation, and ${contrastPairs.length} contrast pairs.`,
 );
 
 function contrast(foreground, background) {
