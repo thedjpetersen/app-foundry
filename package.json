@@ -6,10 +6,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thedjpetersen/astryxkit.git",
-    "directory": "packages/app-foundry"
+    "url": "git+https://github.com/thedjpetersen/app-foundry.git"
   },
-  "homepage": "https://thedjpetersen.github.io/astryxkit/#/overview",
+  "bugs": {
+    "url": "https://github.com/thedjpetersen/app-foundry/issues"
+  },
+  "homepage": "https://github.com/thedjpetersen/app-foundry#readme",
   "keywords": [
     "application-framework",
     "domain-driven-design",
@@ -46,9 +48,18 @@
   "scripts": {
     "build": "npm run clean && tsc -p tsconfig.json",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepare": "npm run build",
+    "validate": "npm run check && npm run build"
   },
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260624.1",
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.1.8",
+    "react": "^19.1.0",
+    "typescript": "^5.9.2"
   }
 }

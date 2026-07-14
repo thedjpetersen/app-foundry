@@ -1,13 +1,24 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM", "DOM.Iterable", "WebWorker"],
+    "jsx": "react-jsx",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": false,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
     "noEmit": false,
     "outDir": "dist",
+    "resolveJsonModule": true,
     "rootDir": "src",
-    "sourceMap": true
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src"]
 }
