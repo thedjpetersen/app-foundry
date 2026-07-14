@@ -1,4 +1,4 @@
-// The Worker helpers stay small on principle: a router that is a `for`
+// Responsibility: The Worker helpers stay small on principle: a router that is a `for`
 // loop, JSON helpers that set the right headers, and body readers that
 // never throw on garbage input. Bindings, schemas, auth, and deployment
 // topology are host-product decisions — nothing here hides them.
@@ -6,9 +6,7 @@
 export type JsonPrimitive = string | number | boolean | null;
 
 export type JsonValue =
-  | JsonPrimitive
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type JsonObject = Record<string, JsonValue>;
 
@@ -35,13 +33,15 @@ export type WorkerRouterOptions<Env = unknown> = {
     name: string;
     path?: string;
   };
-  notFound?: (context: WorkerRequestContext<Env>) => Response | Promise<Response>;
+  notFound?: (
+    context: WorkerRequestContext<Env>,
+  ) => Response | Promise<Response>;
   routes: WorkerRoute<Env>[];
 };
 
 export function json<TBody extends JsonValue>(
   body: TBody,
-  init: ResponseInit = {}
+  init: ResponseInit = {},
 ): Response {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -55,18 +55,18 @@ export function json<TBody extends JsonValue>(
 export function jsonError(
   error: string,
   status = 400,
-  extras: JsonObject = {}
+  extras: JsonObject = {},
 ): Response {
   return json(
     {
       error,
       ...extras,
     },
-    { status }
+    { status },
   );
 }
 
-// Defensive by contract: malformed JSON, a non-object body, or no body at
+// Failure behavior: Malformed JSON, a non-object body, or no body at
 // all each collapse to `{}` rather than a thrown error. Handlers then use
 // `getText`/`getNullableText` to pull fields, so validation failures are
 // expressed as 400 responses instead of Worker exceptions.
@@ -126,7 +126,7 @@ export function createHealthResponse(name: string): Response {
   });
 }
 
-// The router's dispatch order is the whole story: health check first,
+// Invariant: The router's dispatch order is the whole story: health check first,
 // then routes in declaration order (first match wins), then the static
 // asset fetcher if the env provides one, then 404. No middleware chain,
 // no route trees — a product that outgrows this should write its own
@@ -140,11 +140,15 @@ export function createWorkerRouter<Env>({
   return async (
     request: Request,
     env: Env,
-    ctx: ExecutionContext
+    ctx: ExecutionContext,
   ): Promise<Response> => {
     const url = new URL(request.url);
 
-    if (health && request.method === "GET" && url.pathname === (health.path ?? "/api/health")) {
+    if (
+      health &&
+      request.method === "GET" &&
+      url.pathname === (health.path ?? "/api/health")
+    ) {
       return createHealthResponse(health.name);
     }
 
@@ -179,8 +183,11 @@ export function createWorkerRouter<Env>({
 function matchRoute<Env>(
   route: WorkerRoute<Env>,
   method: string,
-  pathname: string
+  pathname: string,
 ): Record<string, string> | null {
+  // API contract: A non-match is always `null`; a successful static route is
+  // always `{}`. That distinction lets the dispatch loop use one branch for
+  // string and regex routes without treating an empty params object as false.
   const allowedMethods = Array.isArray(route.method)
     ? route.method
     : route.method
@@ -209,7 +216,7 @@ function matchRoute<Env>(
   return {
     ...(match.groups ?? {}),
     ...Object.fromEntries(
-      match.slice(1).map((value, index) => [String(index + 1), value])
+      match.slice(1).map((value, index) => [String(index + 1), value]),
     ),
   };
 }

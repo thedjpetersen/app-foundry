@@ -1,4 +1,5 @@
-// Fine-grained access control as a pure data model: a host product declares
+// Responsibility: Keep authorization as a pure, shared data model. A host
+// product declares
 // its permission strings ("resource:action"), maps roles to permission sets,
 // and gets back one policy engine used identically by Worker routes, agent
 // actions, and React capability checks. Everything here is deny-by-default —
@@ -80,12 +81,12 @@ export type AuthorizeResult = {
 };
 
 /**
- * Validate a definition once at startup and freeze it into a model. Typos are
+ * Decision: Validate a definition once at startup and freeze it into a model. Typos are
  * configuration bugs, so a role or group referencing an unregistered
  * permission throws here instead of silently never matching at runtime.
  */
 export function defineAccessControl(
-  definition: AccessControlDefinition
+  definition: AccessControlDefinition,
 ): AccessControlModel {
   const permissions = new Set<Permission>();
 
@@ -103,11 +104,14 @@ export function defineAccessControl(
 
   const roles = new Map<Role, ReadonlySet<Permission>>();
 
+  // Failure behavior: Role declarations are checked against the one
+  // permission registry before the model escapes this function. A typo can
+  // therefore never turn into an ambiguous denial several requests later.
   for (const [role, rolePermissions] of Object.entries(definition.roles)) {
     for (const permission of rolePermissions) {
       if (!permissions.has(permission)) {
         throw new Error(
-          `Role "${role}" references unknown permission: ${permission}`
+          `Role "${role}" references unknown permission: ${permission}`,
         );
       }
     }
@@ -122,6 +126,9 @@ export function defineAccessControl(
   const groups = definition.groups ?? [];
   const groupIds = new Set<string>();
 
+  // Invariant: Editor groups are only views over registered permissions.
+  // They may reorganize the registry for humans, but cannot silently invent
+  // a capability that authorization code would interpret differently.
   for (const group of groups) {
     if (groupIds.has(group.id)) {
       throw new Error(`Duplicate permission group id: ${group.id}`);
@@ -132,7 +139,7 @@ export function defineAccessControl(
     for (const permission of group.permissions) {
       if (!permissions.has(permission)) {
         throw new Error(
-          `Group "${group.id}" references unknown permission: ${permission}`
+          `Group "${group.id}" references unknown permission: ${permission}`,
         );
       }
     }
@@ -149,14 +156,14 @@ export function defineAccessControl(
 }
 
 /**
- * The one place effective permissions are computed:
+ * Invariant: This is the one place effective permissions are computed:
  * (role's base set + explicit grants) - explicit denies. Denies win over
  * everything; unknown roles resolve to the empty set and unknown permission
  * strings in grants are ignored, so bad data can only narrow access.
  */
 export function computeEffectivePermissions(
   model: AccessControlModel,
-  { denies = [], grants = [], role }: EffectivePermissionInput
+  { denies = [], grants = [], role }: EffectivePermissionInput,
 ): Set<Permission> {
   const effective = new Set(model.roles.get(role) ?? []);
 
@@ -174,14 +181,15 @@ export function computeEffectivePermissions(
 }
 
 /**
- * The policy decision every surface calls. Denies by default: no permission,
+ * Failure behavior: This is the policy decision every surface calls. It
+ * denies by default: no permission,
  * an empty permission string, or a self-scoped permission without a matching
  * acting user all fail with a reason string suitable for a 403 body.
  */
 export function authorize(
   effective: ReadonlySet<Permission>,
   permission: Permission,
-  { actingUserId, resourceOwnerId, selfPermissions }: AuthorizeOptions = {}
+  { actingUserId, resourceOwnerId, selfPermissions }: AuthorizeOptions = {},
 ): AuthorizeResult {
   if (typeof permission !== "string" || !permission.trim()) {
     return { allowed: false, reason: "No permission specified" };
@@ -214,7 +222,7 @@ export function authorize(
 export function can(
   effective: ReadonlySet<Permission>,
   permission: Permission,
-  opts?: AuthorizeOptions
+  opts?: AuthorizeOptions,
 ): boolean {
   return authorize(effective, permission, opts).allowed;
 }
@@ -226,7 +234,7 @@ export function can(
 export function roleAtLeast(
   model: AccessControlModel,
   role: Role,
-  minimum: Role
+  minimum: Role,
 ): boolean {
   const roleIndex = model.roleOrder.indexOf(role);
   const minimumIndex = model.roleOrder.indexOf(minimum);
@@ -241,7 +249,7 @@ export function roleAtLeast(
 /** True when `value` is a registered permission of this model. */
 export function isPermission(
   model: AccessControlModel,
-  value: unknown
+  value: unknown,
 ): value is Permission {
   return typeof value === "string" && model.permissions.has(value);
 }
@@ -256,7 +264,7 @@ export function listPermissions(model: AccessControlModel): Permission[] {
  * permissions no group claims, so editors always cover the whole registry.
  */
 export function listPermissionGroups(
-  model: AccessControlModel
+  model: AccessControlModel,
 ): PermissionGroup[] {
   const grouped = new Set<Permission>();
 
@@ -267,7 +275,7 @@ export function listPermissionGroups(
   }
 
   const ungrouped = [...model.permissions].filter(
-    (permission) => !grouped.has(permission)
+    (permission) => !grouped.has(permission),
   );
 
   const groups = [...model.groups];
@@ -288,9 +296,10 @@ export function listPermissionGroups(
  * `computeEffectivePermissions` expects. A permission that appears as both
  * lands in both lists, and the deny wins downstream.
  */
-export function partitionPermissionGrants(
-  rows: readonly PermissionGrant[]
-): { denies: Permission[]; grants: Permission[] } {
+export function partitionPermissionGrants(rows: readonly PermissionGrant[]): {
+  denies: Permission[];
+  grants: Permission[];
+} {
   const denies: Permission[] = [];
   const grants: Permission[] = [];
 

@@ -1,4 +1,4 @@
-// A command palette is interaction-heavy but should not be UI-kit-specific.
+// Responsibility: A command palette is interaction-heavy but should not be UI-kit-specific.
 // This model owns search results, grouping, keyboard movement, drill-in
 // state, and execution. A presentation adapter only renders the returned
 // items and wires its input/list primitives to this controller, keeping
@@ -42,7 +42,7 @@ export type ShellCommandPaletteModel = {
   setQuery: (query: string) => void;
 };
 
-// Interaction controller shared by every UI kit's command palette. Visible
+// API contract: This interaction controller is shared by every UI kit's command palette. Visible
 // commands come from the host registry, which already applies context and
 // feature gates before anything reaches presentation.
 export function useShellCommandPaletteModel({
@@ -151,6 +151,9 @@ export function useShellCommandPaletteModel({
       return;
     }
 
+    // Decision: Enter executes the selected model row; Escape first unwinds
+    // one drill level and only then closes the surface. That two-stage escape
+    // makes nested command groups behave like navigation rather than dialogs.
     if (event.key === "Enter") {
       event.preventDefault();
       executeItem(items[selectedIndex]);
@@ -186,7 +189,7 @@ export function useShellCommandPaletteModel({
   };
 }
 
-// Search is delegated to the registry so ranking, recent history, context
+// Decision: Search is delegated to the registry so ranking, recent history, context
 // gates, and dynamic sources remain authoritative. Drilling only changes
 // which registry query supplies the rows and prepends one synthetic back row.
 export function buildCommandItems(
@@ -208,7 +211,7 @@ export function buildCommandItems(
     .map((result) => commandToItem(result.command, result));
 }
 
-// Preserve first-seen group order from ranked results. Sorting again here
+// Invariant: Preserve first-seen group order from ranked results. Sorting again here
 // would quietly discard ranking decisions already made by the registry.
 export function groupCommandItems(items: ShellCommandPaletteItem[]) {
   const groups: ShellCommandPaletteGroup[] = [];
@@ -227,6 +230,9 @@ export function groupCommandItems(items: ShellCommandPaletteItem[]) {
 }
 
 function createBackItem(parent: CommandContribution): ShellCommandPaletteItem {
+  // Decision: Drill navigation is represented as a synthetic command rather
+  // than a presentation-only button. Keyboard selection, accessibility, and
+  // UI-kit adapters can therefore treat it like every other palette row.
   const command: CommandContribution = {
     id: "platform.paletteBack",
     appId: "platform",
@@ -252,6 +258,9 @@ function commandToItem(
   result: RankedCommandResult,
   drillParent?: CommandContribution,
 ): ShellCommandPaletteItem {
+  // API contract: Adapters consume one deliberately boring row shape. The
+  // ranked result remains attached for match highlighting, while labels and
+  // grouping are resolved here so visual kits do not reinterpret semantics.
   return {
     id: command.id,
     label: command.title,
@@ -267,6 +276,9 @@ function groupLabelForResult(
   result: RankedCommandResult,
   drillParent?: CommandContribution,
 ) {
+  // Invariant: Recent history and drill context outrank ownership labels.
+  // This mirrors the registry's ranking hierarchy and prevents an adapter
+  // from making the same command appear to change provenance as users type.
   if (drillParent) {
     return `${drillParent.title} actions`;
   }

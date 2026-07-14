@@ -1,4 +1,4 @@
-// The frame model is the smallest useful projection of `ShellHost` for a
+// Responsibility: The frame model is the smallest useful projection of `ShellHost` for a
 // product shell: the app catalog, the app matching the current location,
 // and active-app contributions grouped into their four top-nav slots. It
 // contains no Astryx, DOM, or layout decisions, so different UI kits can
@@ -19,7 +19,7 @@ export type ShellFrameModel = {
   topNavMounts: Record<ShellTopNavMountArea, ShellTopNavMountContribution[]>;
 };
 
-// `useHostVersion` is the subscription edge. The returned number is not
+// Invariant: `useHostVersion` is the subscription edge. The returned number is not
 // business data; including it in the memo dependencies simply invalidates
 // the projection whenever manifests, activation, or nav mounts change.
 export function useShellFrameModel({

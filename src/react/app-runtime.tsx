@@ -1,4 +1,4 @@
-// This module translates the asynchronous App Module lifecycle into states
+// Responsibility: This module translates the asynchronous App Module lifecycle into states
 // a React presentation can render safely. Activation, cancellation, route
 // props, and recovery remain framework responsibilities; a UI kit supplies
 // loading/empty/error visuals without racing the host or leaking an app's
@@ -49,7 +49,7 @@ export type UseShellAppOutletOptions = {
   workspace: WorkspaceContext;
 };
 
-// Activate one App Module and return its presentation-neutral outlet state.
+// Lifecycle: Activate one App Module and return its presentation-neutral outlet state.
 // A UI kit renders unavailable, loading, ready, and error states without
 // duplicating lifecycle or race handling.
 export function useShellAppOutlet({
@@ -145,7 +145,10 @@ type ShellAppBoundaryState = {
   resetKey: string;
 };
 
-// Error isolation with UI rendering supplied at the Presentation Seam. The
+// Invariant: `resetKey` is stored beside the error so navigation can clear a
+// stale failure during React's derived-state phase. Waiting for an effect
+// would briefly render the previous app's error against the next app.
+// Failure behavior: Error isolation keeps UI rendering at the Presentation Seam. The
 // boundary owns capture, reset, and reporting; `renderError` keeps recovery
 // visuals out of the framework.
 export class ShellAppBoundary extends Component<

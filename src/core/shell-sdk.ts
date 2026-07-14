@@ -1,10 +1,10 @@
-// The shell SDK is the seam between a host product and its micro-apps: one
+// Responsibility: The shell SDK is the seam between a host product and its micro-apps: one
 // shared object holding four services — commands, context keys, events, and
 // preferences. Everything in this file is framework-agnostic TypeScript.
 // The React package subscribes to these services, and `ShellHost` composes
 // them into an app registration and activation lifecycle.
 //
-// Two conventions run through the whole file. First, every mutation returns
+// Invariant: Two conventions run through the whole file. First, every mutation returns
 // a `Disposable`, so any contribution can be unwound in reverse order —
 // that is what makes app activation safely reversible. Second, every
 // service keeps a monotonic version counter, so React can bind with
@@ -68,7 +68,7 @@ export type CommandEntity = {
   description?: string;
 };
 
-// A command is declared as data long before any code is loaded: the palette
+// Decision: A command is declared as data long before any code is loaded: the palette
 // can list, rank, and route to it while the owning app module is still a
 // lazy import. `handler` is optional for exactly that reason — declaration
 // and binding are separate steps (see `CommandRegistry.declare` and
@@ -268,7 +268,7 @@ type CommandActivator = (command: CommandContribution) => Promise<void> | void;
 const defaultPlatformId = "app-foundry";
 const defaultShellInstanceId = "app-foundry-shell-sdk";
 
-// Collects disposables so a whole scope — an activated app, a registered
+// Lifecycle: This store collects disposables so a whole scope — an activated app, a registered
 // source — can be torn down with one call. The subtle invariant: adding to
 // an already-disposed store disposes the newcomer immediately, which closes
 // the race where an async activation finishes after its app was switched
@@ -1021,7 +1021,7 @@ export class PreferencesStore {
     );
   }
 
-  // Inspection powers settings UI: beyond the resolved value it reports
+  // API contract: Inspection powers settings UI: beyond the resolved value it reports
   // which ring supplied it, whether it is inherited from a wider ring,
   // whether a user override exists, and the per-ring values — enough to
   // render VS Code-style "modified elsewhere" affordances.
@@ -1070,7 +1070,7 @@ export class PreferencesStore {
     });
   }
 
-  // Settings UI is generated from declarations: schemas that pass their
+  // Decision: Settings UI is generated from declarations: schemas that pass their
   // `when` clause are bucketed by `ring:scope:category`, and each bucket
   // becomes one card in the preferences panel, settings alphabetized.
   settingsGroups(context: ContextKeyService): SettingsGroup[] {
@@ -1110,6 +1110,10 @@ export class PreferencesStore {
     }));
   }
 
+  // Lifecycle: Preference observers follow the same disposable subscription
+  // contract as commands, context, and events. This symmetry is what lets a
+  // React adapter bind every service through `useSyncExternalStore` without
+  // service-specific cleanup rules.
   subscribe(listener: Listener): Disposable {
     this.listeners.add(listener);
 
@@ -1154,7 +1158,7 @@ export class PreferencesStore {
     }
   }
 
-  // The inspector's cascade view: walk outermost-in (platform toward
+  // Invariant: The inspector's cascade view walks outermost-in (platform toward
   // feature) collecting each ring's stored value, surfacing the user layer
   // separately when it is the one that won.
   private layersForKey(
@@ -1290,7 +1294,7 @@ export class EventBus {
   }
 }
 
-// Micro-app architectures ship modules independently, which means two
+// Failure behavior: Micro-app architectures ship modules independently, which means two
 // copies of this file can end up loaded at once — one bundled with the
 // host, one with an app. If each copy had its own SDK, commands would
 // register into a registry nobody reads. Stashing the singleton on
@@ -1732,6 +1736,9 @@ function normalizePreferenceSchema(
   };
 }
 
+// Invariant: Resolution context is derived from the same normalized schema
+// used to choose storage scope. If these paths diverged, a value could be
+// written under one ownership ring and read back through another.
 function contextForSchema(
   schema: PreferenceSchema,
   platformId: string,

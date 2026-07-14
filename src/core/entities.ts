@@ -1,4 +1,5 @@
-// Cross-app features — `@`-mentions, reference explorers, "everything the
+// Responsibility: Give cross-app features — `@`-mentions, reference
+// explorers, "everything the
 // workspace can point at" pickers — need one index over every app's
 // records. The obvious implementation is an aggregator that calls each
 // app's API directly, and it is exactly wrong: it recreates the coupling
@@ -8,7 +9,7 @@
 
 import type { WorkspaceContext } from "./host.js";
 
-// Kinds are declared by sources, not enumerated by the framework — a
+// Decision: Kinds are declared by sources, not enumerated by the framework — a
 // person, a task, a wiki page, and whatever the next app invents are all
 // just kind ids with display labels and an optional accent color.
 export type WorkspaceEntityKind = {
@@ -18,7 +19,7 @@ export type WorkspaceEntityKind = {
   accent?: string;
 };
 
-// A reference, not a record: just enough to render a mention chip, rank a
+// API contract: This is a reference, not a record: just enough to render a mention chip, rank a
 // popup row, and navigate on click. The `route` doubles as identity, which
 // keeps mentions self-sufficient — a chip stores the route, so clicking it
 // needs no lookup at all.
@@ -71,7 +72,7 @@ export type WorkspaceEntityIndex = {
 };
 
 /**
- * Aggregate every registered source into one workspace-wide index. Sources
+ * Failure behavior: Aggregate every registered source into one workspace-wide index. Sources
  * fail independently: a broken app degrades to its entities being absent and
  * its id landing in `failedSourceIds`, never to a rejected index.
  */
@@ -160,9 +161,7 @@ export function filterWorkspaceEntities(
 }
 
 /** Unique owner names across an entity set, sorted for stable display. */
-export function collectEntityOwners(
-  entities: WorkspaceEntityRef[],
-): string[] {
+export function collectEntityOwners(entities: WorkspaceEntityRef[]): string[] {
   const owners = new Set<string>();
 
   for (const entity of entities) {

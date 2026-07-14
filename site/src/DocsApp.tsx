@@ -20,7 +20,17 @@ import {
   TopNavItem,
   VStack,
 } from "@astryxdesign/core";
+import {
+  ensureHighlightStyles,
+  tokenize,
+  type SyntaxToken,
+  type TokenLine,
+} from "@astryxdesign/core/CodeBlock";
 import { Theme, defineTheme } from "@astryxdesign/core/theme";
+import {
+  SyntaxTheme,
+  defineSyntaxTheme,
+} from "@astryxdesign/core/theme/syntax";
 import {
   borderVars,
   colorVars,
@@ -56,6 +66,25 @@ import {
 } from "./content";
 
 const docsTheme = defineTheme({ name: "app-foundry-docs" });
+const sourceSyntaxTheme = defineSyntaxTheme({
+  name: "app-foundry-source",
+  tokens: {
+    keyword: "#ff9b91",
+    string: "#a5d6ff",
+    comment: "#b5bdc8",
+    number: "#79c0ff",
+    function: "#d2a8ff",
+    type: "#ffa657",
+    variable: "#f4f6fb",
+    operator: "#7ee787",
+    constant: "#79c0ff",
+    tag: "#7ee787",
+    attribute: "#a5d6ff",
+    property: "#79c0ff",
+    punctuation: "#c9d1d9",
+    background: "#1a2652",
+  },
+});
 const repositoryUrl = "https://github.com/thedjpetersen/app-foundry";
 const primarySlugs = [
   "",
@@ -67,6 +96,8 @@ const primarySlugs = [
 ];
 
 export function DocsApp() {
+  useEffect(() => ensureHighlightStyles(), []);
+
   const route = resolveRoute();
   const page = pages.find((candidate) => candidate.slug === route) ?? pages[0];
 
@@ -392,6 +423,11 @@ function SourceIndex() {
 function AnnotatedSource({ module }: { module: SourceModule }) {
   const sections = parseAnnotatedSections(module.raw);
   const symbols = collectExportedSymbols(module.raw);
+  const language = module.path.endsWith(".tsx") ? "tsx" : "typescript";
+  const syntaxLines = useMemo(
+    () => tokenize(module.raw, language),
+    [language, module.raw],
+  );
   const outlineItems = symbols.map((symbol) => ({
     id: `L${symbol.line}`,
     label: symbol.name,
@@ -460,24 +496,25 @@ function AnnotatedSource({ module }: { module: SourceModule }) {
               >
                 <VStack gap={2}>
                   {section.annotation.map((paragraph, index) => (
-                    <Text
+                    <AnnotationParagraph
                       key={`${section.sectionStartLine}-${index}`}
-                      as="p"
-                      display="block"
-                      type="supporting"
-                      color="secondary"
-                    >
-                      {renderInlineCode(paragraph)}
-                    </Text>
+                      value={paragraph}
+                    />
                   ))}
                 </VStack>
               </Section>
               <section {...stylex.props(styles.sourceCodeCell)}>
-                <pre>
-                  <code>
-                    {renderCodeLines(section.code, section.startLine)}
-                  </code>
-                </pre>
+                <SyntaxTheme theme={sourceSyntaxTheme}>
+                  <pre>
+                    <code>
+                      {renderCodeLines(
+                        section.code,
+                        section.startLine,
+                        syntaxLines,
+                      )}
+                    </code>
+                  </pre>
+                </SyntaxTheme>
               </section>
             </li>
           ))}
@@ -559,10 +596,51 @@ function renderInlineCode(value: string) {
     );
 }
 
-function renderCodeLines(code: string, startLine: number) {
+const annotationKinds = [
+  "Responsibility",
+  "Invariant",
+  "Decision",
+  "Lifecycle",
+  "Failure behavior",
+  "API contract",
+] as const;
+
+function AnnotationParagraph({ value }: { value: string }) {
+  const kind = annotationKinds.find((candidate) =>
+    value.startsWith(`${candidate}:`),
+  );
+  const prose = kind ? value.slice(kind.length + 1).trim() : value;
+
+  return (
+    <section {...stylex.props(styles.annotationParagraph)}>
+      {kind ? (
+        <Text
+          as="p"
+          display="block"
+          type="supporting"
+          weight="semibold"
+          xstyle={styles.annotationKind}
+        >
+          {kind}
+        </Text>
+      ) : null}
+      <Text as="p" display="block" type="supporting" color="secondary">
+        {renderInlineCode(prose)}
+      </Text>
+    </section>
+  );
+}
+
+function renderCodeLines(
+  code: string,
+  startLine: number,
+  syntaxLines: TokenLine[],
+) {
   if (!code) return null;
 
-  return code.split("\n").map((line, index) => {
+  const lines = code.split("\n");
+
+  return lines.map((line, index) => {
     const lineNumber = startLine + index;
     return (
       <span
@@ -577,10 +655,38 @@ function renderCodeLines(code: string, startLine: number) {
         >
           {lineNumber}
         </a>
-        <span {...stylex.props(styles.codeText)}>{line || " "}</span>
+        <span {...stylex.props(styles.codeText)}>
+          {renderSyntaxLine(line, syntaxLines[lineNumber - 1] ?? [])}
+        </span>
       </span>
     );
   });
+}
+
+function renderSyntaxLine(line: string, tokens: SyntaxToken[]) {
+  if (!line) return " ";
+
+  const fragments: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const token of tokens) {
+    if (token.start > cursor) {
+      fragments.push(line.slice(cursor, token.start));
+    }
+
+    fragments.push(
+      <span
+        key={`${token.start}-${token.end}-${token.type}`}
+        className={`astryx-token-${token.type}`}
+      >
+        {line.slice(token.start, token.end)}
+      </span>,
+    );
+    cursor = token.end;
+  }
+
+  if (cursor < line.length) fragments.push(line.slice(cursor));
+  return fragments;
 }
 
 function textFromNode(node: ReactNode): string {
@@ -805,6 +911,15 @@ const styles = stylex.create({
     alignContent: "start",
     minHeight: spacingVars["--spacing-5"],
   },
+  annotationParagraph: {
+    display: "grid",
+    gap: spacingVars["--spacing-1"],
+  },
+  annotationKind: {
+    color: colorVars["--color-text-accent"],
+    letterSpacing: ".035em",
+    textTransform: "uppercase",
+  },
   sourceCodeCell: {
     backgroundColor: "#1a2652",
     borderBottomColor: "rgba(255,255,255,.08)",
@@ -832,7 +947,7 @@ const styles = stylex.create({
     textDecorationLine: "none",
     userSelect: "none",
   },
-  codeText: { color: "#f4f6fb", whiteSpace: "pre" },
+  codeText: { color: "var(--color-syntax-variable)", whiteSpace: "pre" },
   sourceOutline: { backgroundColor: colorVars["--color-background-body"] },
   pageTurn: {
     borderTopColor: colorVars["--color-border"],

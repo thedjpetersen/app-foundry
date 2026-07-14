@@ -1,4 +1,4 @@
-// App Foundry owns the mechanics every generator must get right—portable
+// Responsibility: App Foundry owns the mechanics every generator must get right—portable
 // naming, path containment, overwrite policy, dry runs, and deterministic
 // writes—while a UI kit or product owns the recipe that decides what files
 // and imports to emit. Separating mechanism from recipe lets presentation
@@ -45,7 +45,7 @@ export type ScopedNameParts = NameParts & {
   rawName: string;
 };
 
-// Execute a UI-kit-owned recipe with framework-owned safety. The recipe is
+// Failure behavior: Execute a UI-kit-owned recipe with framework-owned safety. The recipe is
 // evaluated before any writes, then every proposed path is resolved inside
 // `cwd`; one invalid plan therefore fails before it can partially escape the
 // requested project root.
@@ -94,7 +94,7 @@ export async function runGenerator(
   return written;
 }
 
-// Scoped names make ownership visible in keys and filenames. Splitting only
+// Decision: Scoped names make ownership visible in keys and filenames. Splitting only
 // on the first app segment lets feature names retain nested punctuation while
 // normalizing to one stable `<app>.<feature>` identity.
 export function toScopedNameParts(
@@ -118,7 +118,7 @@ export function toScopedNameParts(
   };
 }
 
-// Produce all naming forms once so recipes cannot drift between hand-written
+// Invariant: Produce all naming forms once so recipes cannot drift between hand-written
 // camel, Pascal, title, and kebab transformations.
 export function toNameParts(value: string): NameParts {
   const kebab = toKebab(value);

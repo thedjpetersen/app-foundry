@@ -65,10 +65,39 @@ for (const kind of ["Guide", "Section", "Module", "Symbol"]) {
 
 const moduleEntries = searchIndex.filter(({ kind }) => kind === "Module");
 for (const entry of moduleEntries) {
+  const raw = await readFile(path.join(root, entry.context), "utf8");
   const commentaryWordCount = entry.terms.split(/\s+/).filter(Boolean).length;
   if (commentaryWordCount < 40) {
     throw new Error(
       `${entry.context} needs stronger annotated commentary (${commentaryWordCount} words)`,
+    );
+  }
+
+  const firstLine = raw.split("\n").find((line) => line.trim());
+  if (!firstLine?.trim().startsWith("// Responsibility:")) {
+    throw new Error(
+      `${entry.context} must open by explaining the module's responsibility`,
+    );
+  }
+
+  const structuredAnnotations = [
+    ...raw.matchAll(
+      /\b(?:Responsibility|Invariant|Decision|Lifecycle|Failure behavior|API contract):/g,
+    ),
+  ];
+  const lineCount = raw.split("\n").length;
+  const requiredAnnotations = lineCount > 100 ? 4 : 2;
+
+  if (structuredAnnotations.length < requiredAnnotations) {
+    throw new Error(
+      `${entry.context} needs ${requiredAnnotations} structured architectural annotations; found ${structuredAnnotations.length}`,
+    );
+  }
+
+  const longestRun = longestUnannotatedRun(raw);
+  if (longestRun > 60) {
+    throw new Error(
+      `${entry.context} leaves ${longestRun} lines without explanatory context`,
     );
   }
 }
@@ -113,6 +142,10 @@ for (const marker of [
   "src/react/presentation-adapter.ts",
   "Search docs and source",
   "No guide, section, module, or symbol matches",
+  "app-foundry-source",
+  "astryx-token-",
+  "Responsibility",
+  "Failure behavior",
 ]) {
   if (!javascript.includes(marker)) {
     throw new Error(`Compiled documentation application is missing ${marker}`);
@@ -137,6 +170,11 @@ if (
 const contrastPairs = [
   ["#f4f6fb", "#1a2652", "annotated source code"],
   ["#b9c7f5", "#1a2652", "annotated source line numbers"],
+  ["#ff9b91", "#1a2652", "syntax keywords"],
+  ["#a5d6ff", "#1a2652", "syntax strings"],
+  ["#b5bdc8", "#1a2652", "syntax comments"],
+  ["#ffa657", "#1a2652", "syntax types"],
+  ["#7ee787", "#1a2652", "syntax operators"],
 ];
 
 for (const [foreground, background, label] of contrastPairs) {
@@ -147,8 +185,25 @@ for (const [foreground, background, label] of contrastPairs) {
 }
 
 console.log(
-  `Checked ${pages.length} Astryx routes, ${sourcePages.length} annotated modules, ${searchIndex.length} search entries, compiled tokens, package boundaries, and source contrast.`,
+  `Checked ${pages.length} Astryx routes, ${sourcePages.length} architecturally annotated modules, ${searchIndex.length} search entries, syntax highlighting, package boundaries, and source contrast.`,
 );
+
+function longestUnannotatedRun(raw) {
+  let current = 0;
+  let longest = 0;
+
+  for (const line of raw.split("\n")) {
+    if (/^\s*(?:\/\/|\/\*|\*|\*\/)/.test(line)) {
+      current = 0;
+      continue;
+    }
+
+    current += 1;
+    longest = Math.max(longest, current);
+  }
+
+  return longest;
+}
 
 function contrast(foreground, background) {
   const light = luminance(foreground);

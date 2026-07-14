@@ -1,4 +1,4 @@
-// Preferences have an ownership hierarchy, but a UI kit should not need to
+// Responsibility: Preferences have an ownership hierarchy, but a UI kit should not need to
 // understand how groups are resolved or which app is currently active. This
 // model turns the host registry into ordered ring groups plus one resilient
 // selection. Presentation decides whether those groups become a sidebar,
@@ -22,7 +22,7 @@ export type ShellPreferencesModel = {
   selectedGroup?: SettingsGroup;
 };
 
-// Selection and grouping behavior shared by every UI kit's preferences view.
+// API contract: Selection and grouping behavior is shared by every UI kit's preferences view.
 export function useShellPreferencesModel(
   host: ShellHost,
 ): ShellPreferencesModel {
@@ -63,7 +63,7 @@ export function useShellPreferencesModel(
   };
 }
 
-// Ring order expresses the framework's ownership ladder. Empty rings are
+// Invariant: Ring order expresses the framework's ownership ladder. Empty rings are
 // omitted so a presentation never renders navigation with dead headings.
 export function groupSettingsByRing(
   groups: SettingsGroup[],
@@ -83,7 +83,7 @@ export function groupSettingsByRing(
     .filter((item) => item.groups.length > 0);
 }
 
-// Prefer the active app, then progressively broader ownership. This makes
+// Decision: Prefer the active app, then progressively broader ownership. This makes
 // opening settings feel local to the current task while still producing a
 // deterministic landing group when no app is active.
 export function preferredSettingsGroup(

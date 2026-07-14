@@ -1,4 +1,4 @@
-// Short links are a platform-wide affordance, so their three parts live
+// Responsibility: Short links are a platform-wide affordance, so their three parts live
 // together: code generation for artifacts (`D7KQ2M9X`), readable codes for
 // humans to say out loud (`kfq4-x2mh`), and the route that turns
 // `/d/<code>` back into an app route. The React package's `ShareCodeChip`
@@ -41,15 +41,12 @@ export type ShortLinkRouteOptions<Env = unknown> = {
   resolve: (
     code: string,
     context: WorkerRequestContext<Env>,
-  ) =>
-    | Promise<string | null | undefined>
-    | string
-    | null
-    | undefined;
+  ) => Promise<string | null | undefined> | string | null | undefined;
 };
 
 /**
- * Cryptographically random short code, e.g. `generateShortCode({ prefix: "D" })`
+ * Invariant: This cryptographically random short code uses rejection sampling,
+ * e.g. `generateShortCode({ prefix: "D" })`
  * -> "D7KQ2M9X". Sampling is rejection-based so every character is uniform.
  */
 export function generateShortCode({
@@ -61,7 +58,7 @@ export function generateShortCode({
 }
 
 /**
- * Human-friendly code in separated groups, e.g. "kfq4-x2mh" — meant to be
+ * Decision: Human-friendly codes use separated groups, e.g. "kfq4-x2mh" — meant to be
  * read aloud (meeting joins, pairing codes).
  */
 export function generateReadableCode({
@@ -80,7 +77,7 @@ export function generateReadableCode({
 }
 
 /**
- * Route that resolves `<pathPrefix>/<code>` to an app route and redirects,
+ * Failure behavior: The route resolves `<pathPrefix>/<code>` to an app route and redirects,
  * for use with `createWorkerRouter`. `resolve` returning null/undefined
  * yields the `notFound` response (default: JSON 404).
  */

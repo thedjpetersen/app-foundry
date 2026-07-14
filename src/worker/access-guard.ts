@@ -1,4 +1,4 @@
-// Worker-side enforcement for the core access-control model, kept generic:
+// Responsibility: Worker-side enforcement for the core access-control model stays generic:
 // the host resolves who the caller is and what they can do; these helpers
 // turn that into 401/403 responses, double-submit CSRF checks, and a
 // fixed-window D1 rate limiter. No table names or permission strings are
@@ -20,7 +20,7 @@ export type RequireCapabilityInput = {
 export type CapabilityGuard = (
   request: Request,
   permission: Permission,
-  opts?: AuthorizeOptions
+  opts?: AuthorizeOptions,
 ) => Promise<Response | null>;
 
 /**
@@ -28,7 +28,7 @@ export type CapabilityGuard = (
  * set, or null/undefined when the request carries no valid session.
  */
 export type EffectivePermissionResolver = (
-  request: Request
+  request: Request,
 ) =>
   | Promise<ReadonlySet<Permission> | null | undefined>
   | ReadonlySet<Permission>
@@ -63,7 +63,7 @@ export function requireCapability({
  * No session is a 401; a session without the capability is a 403.
  */
 export function createCapabilityGuard(
-  resolveEffective: EffectivePermissionResolver
+  resolveEffective: EffectivePermissionResolver,
 ): CapabilityGuard {
   return async (request, permission, opts) => {
     const effective = await resolveEffective(request);
@@ -78,7 +78,7 @@ export function createCapabilityGuard(
 
 // --- CSRF (double-submit cookie) -----------------------------------------
 //
-// The token lives in a cookie the page's own JavaScript can read and must be
+// Decision: The token lives in a cookie the page's own JavaScript can read and must be
 // echoed back in a request header. Cross-origin pages can force the cookie to
 // be *sent* but cannot read it to build the header, so a matching pair proves
 // same-origin intent. The cookie is therefore deliberately NOT HttpOnly.
@@ -141,7 +141,7 @@ export function verifyCsrf(
   {
     cookieName = DEFAULT_CSRF_COOKIE_NAME,
     headerName = DEFAULT_CSRF_HEADER_NAME,
-  }: VerifyCsrfOptions = {}
+  }: VerifyCsrfOptions = {},
 ): boolean {
   const headerToken = request.headers.get(headerName);
   const cookieToken = readCookie(request.headers.get("Cookie"), cookieName);
@@ -174,7 +174,7 @@ export function constantTimeEqual(a: string, b: string): boolean {
 
 // --- Fixed-window rate limiting on D1 -------------------------------------
 //
-// One row per key, self-resetting: the upsert's CASE compares the stored
+// Invariant: One row per key, self-resetting: the upsert's CASE compares the stored
 // window to the current one, so a stale row restarts at 1 instead of
 // needing a cleanup job. The consumer owns the table and its migration;
 // `buildRateLimitTableSql` states the expected shape.
@@ -200,7 +200,7 @@ export type RateLimitResult = {
 export type D1RateLimiter = {
   check: (
     key: string,
-    options?: RateLimitCheckOptions
+    options?: RateLimitCheckOptions,
   ) => Promise<RateLimitResult>;
 };
 
@@ -219,7 +219,7 @@ export function buildRateLimitTableSql(table = "rate_limits"): string {
 }
 
 /**
- * Fixed-window limiter: `check` increments the key's counter for the current
+ * Failure behavior: The fixed-window limiter increments the key's counter for the current
  * window in a single upsert and reports whether it stayed within the limit.
  * Empty keys bypass the limiter entirely, so callers can pass "" when there
  * is no meaningful client identity to bucket by. D1 failures propagate — the
@@ -247,6 +247,9 @@ export function createD1RateLimiter({
       const windowStart =
         Math.floor(nowSeconds / windowSeconds) * windowSeconds;
 
+      // Invariant: Increment and window rollover happen in the same D1
+      // statement. Splitting read from write would allow concurrent requests
+      // to observe the same count and both pass the limit.
       const row = await db
         .prepare(statement)
         .bind(key, windowStart)
@@ -266,6 +269,9 @@ export function createD1RateLimiter({
   };
 }
 
+// Failure behavior: Cookie parsing is deliberately narrow. A malformed
+// percent-encoded value becomes “no token” and therefore a failed CSRF check;
+// untrusted input never turns into an exception from the request guard.
 function readCookie(header: string | null, name: string): string | null {
   if (!header) {
     return null;

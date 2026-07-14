@@ -1,4 +1,4 @@
-// If the shell SDK is the nervous system, `ShellHost` is the spine: it
+// Responsibility: If the shell SDK is the nervous system, `ShellHost` is the spine: it
 // holds the manifest catalog, decides which single app is active, and
 // guarantees that everything an app contributed while active — commands,
 // handlers, nav mounts, subscriptions — is disposed the moment it stops
@@ -28,7 +28,7 @@ import {
   type ShellSDK,
 } from "./shell-sdk.js";
 
-// The two context objects every app render receives: which workspace the
+// Decision: The two context objects every app render receives say only which workspace the
 // user is in, and which route the shell matched to mount the app. Kept
 // deliberately thin — tenancy, membership, and permissions are host
 // product data, not shell data.
@@ -58,7 +58,7 @@ export type ShellPreferenceDefault = {
   value: PreferenceValue;
 };
 
-// The manifest is the contract an app signs before any of its code loads:
+// API contract: The manifest is the contract an app signs before any of its code loads:
 // identity and routing (`id`, `route`, `entryUrl`), declared-up-front
 // contributions (`commands`, `preferences`, `entitySources`, `features`),
 // and one lazy `load()` that resolves the real module on first activation.
@@ -165,10 +165,7 @@ export class ShellHost implements Disposable {
     string,
     ShellSideNavMountContribution
   >();
-  private readonly entitySourcesById = new Map<
-    string,
-    WorkspaceEntitySource
-  >();
+  private readonly entitySourcesById = new Map<string, WorkspaceEntitySource>();
   private version = 0;
 
   // Construction wires the host into the SDK: it installs itself as the
@@ -253,6 +250,9 @@ export class ShellHost implements Disposable {
 
     this.emit();
 
+    // Lifecycle: The registration disposable owns declarations, defaults,
+    // sources, and a possibly active instance as one unit. Removing a manifest
+    // can therefore never leave its preloaded palette or settings data behind.
     return {
       dispose: () => {
         if (this.active?.manifest.id === manifest.id) {
@@ -343,6 +343,9 @@ export class ShellHost implements Disposable {
       .sort(compareNavMounts);
   }
 
+  // Invariant: Side-nav mounts mirror top-nav ownership and disposal exactly.
+  // Keeping the two stores separate permits different ordering rules later
+  // without weakening the guarantee that deactivation removes both surfaces.
   mountSideNav(contribution: ShellSideNavMountContribution): Disposable {
     if (this.sideNavMountsById.has(contribution.id)) {
       throw new Error(`Side nav mount already registered: ${contribution.id}`);
@@ -469,7 +472,7 @@ export class ShellHost implements Disposable {
     return this.version;
   }
 
-  // Activation: deactivate whoever holds the surface, flip the `appActive`
+  // Lifecycle: Activation deactivates whoever holds the surface, flips the `appActive`
   // context key (so `when` clauses re-evaluate before the module even
   // resolves), then `load()` and run the module's `activate()`. Everything
   // the app binds through `disposeWithApp` lands in one store that
@@ -509,7 +512,7 @@ export class ShellHost implements Disposable {
     return instance;
   }
 
-  // Deactivation is the mirror image, and passing an `appId` makes it
+  // Invariant: Deactivation is the mirror image, and passing an `appId` makes it
   // conditional — "tear down tasks if it is still active" — which lets
   // racing activations resolve safely no matter which one finishes last.
   deactivate(appId?: string) {
@@ -551,7 +554,9 @@ export class ShellHost implements Disposable {
     this.shellSdk.context.set(feature.contextKey, isEnabled);
   }
 
-  // The host-level command runner adds what the registry alone cannot do:
+  // Failure behavior: The host-level command runner rejects unknown ids
+  // before causing navigation. For known commands it adds what the registry
+  // alone cannot do:
   // navigation. Route commands navigate in-shell, `href` commands respect
   // `target="_blank"`, and then execution falls through to the registry's
   // activate-then-run flow.
@@ -577,6 +582,10 @@ export class ShellHost implements Disposable {
     await this.shellSdk.commands.execute(commandId);
   }
 
+  // Lifecycle: One host subscription observes the composed shell, and its
+  // disposable removes exactly that listener. `dispose` then tears down the
+  // active app before removing platform registrations, preserving the same
+  // inside-out ownership order used everywhere else.
   subscribe(listener: HostListener): Disposable {
     this.listeners.add(listener);
 
@@ -683,7 +692,7 @@ export function createPlatformCommandSource({
   };
 }
 
-// The default navigator is a minimal SPA pushState: same-origin URLs update
+// Decision: The default navigator is a minimal SPA pushState: same-origin URLs update
 // history and announce themselves via an `app-foundry:navigate` event for the
 // host router to observe; cross-origin URLs get a full document load. Hosts
 // with real routers replace this wholesale via `ShellHostOptions.navigate`.

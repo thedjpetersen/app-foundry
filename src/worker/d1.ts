@@ -1,4 +1,4 @@
-// Three tiny helpers, one purpose: fail loudly at the boundary. A missing
+// Responsibility: These three helpers fail loudly at the database boundary. A missing
 // or misconfigured D1 binding should be a clear startup error naming the
 // binding, not an `undefined is not an object` five calls deep.
 
@@ -15,7 +15,7 @@ export function requireD1Database<Env extends Record<string, unknown>>(
   return database;
 }
 
-// `batch` gives multi-statement writes a single transactional round trip;
+// Decision: `batch` gives multi-statement writes a single transactional round trip;
 // the empty-array guard exists because D1 rejects empty batches and "no
 // statements" is a legitimate state for callers that build them up
 // conditionally.
@@ -30,7 +30,7 @@ export async function runD1Batch(
   return database.batch(statements);
 }
 
-// Preparing and binding in one call keeps SQL text next to its parameters
+// API contract: Preparing and binding in one call keeps SQL text next to its parameters
 // and returns the statement for composition into either `first`, `all`,
 // `run`, or a later `batch`. It deliberately does not hide D1's result types.
 export function prepareD1Statement(
