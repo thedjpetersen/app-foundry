@@ -1298,8 +1298,6 @@ export class EventBus {
 // map's `@app-foundry/sdk` pin exists for the same reason.
 type ShellGlobal = typeof globalThis & {
   __appFoundryShellSdk?: ShellSDK;
-  /** @deprecated App Foundry keeps this alias during the AstryxKit 0.x migration. */
-  __astryxkitShellSdk?: ShellSDK;
 };
 
 // `CommandRegistry` needs a back-reference to the SDK that owns it (for
@@ -1335,11 +1333,9 @@ export function shell(options: ShellSDKOptions = {}): ShellSDK {
   const globalScope = globalThis as ShellGlobal;
 
   if (!globalScope.__appFoundryShellSdk) {
-    globalScope.__appFoundryShellSdk =
-      globalScope.__astryxkitShellSdk ?? createShellSDK(options);
+    globalScope.__appFoundryShellSdk = createShellSDK(options);
   }
 
-  globalScope.__astryxkitShellSdk = globalScope.__appFoundryShellSdk;
   return globalScope.__appFoundryShellSdk;
 }
 
@@ -1347,7 +1343,6 @@ export function configureShell(options: ShellSDKOptions = {}): ShellSDK {
   const globalScope = globalThis as ShellGlobal;
   const sdk = createShellSDK(options);
   globalScope.__appFoundryShellSdk = sdk;
-  globalScope.__astryxkitShellSdk = sdk;
   return sdk;
 }
 
