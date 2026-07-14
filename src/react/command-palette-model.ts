@@ -1,3 +1,9 @@
+// A command palette is interaction-heavy but should not be UI-kit-specific.
+// This model owns search results, grouping, keyboard movement, drill-in
+// state, and execution. A presentation adapter only renders the returned
+// items and wires its input/list primitives to this controller, keeping
+// command behavior consistent across otherwise independent visual systems.
+
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import type { ShellHost } from "../core/host.js";
 import type {
@@ -36,7 +42,9 @@ export type ShellCommandPaletteModel = {
   setQuery: (query: string) => void;
 };
 
-/** Interaction controller shared by every UI Kit's command palette. */
+// Interaction controller shared by every UI kit's command palette. Visible
+// commands come from the host registry, which already applies context and
+// feature gates before anything reaches presentation.
 export function useShellCommandPaletteModel({
   host,
   isOpen,
@@ -56,6 +64,8 @@ export function useShellCommandPaletteModel({
   );
   const groups = useMemo(() => groupCommandItems(items), [items]);
 
+  // Opening is a fresh search session. Closing also exits any child-command
+  // drill so the next open always begins at the product-wide command level.
   useEffect(() => {
     if (isOpen) {
       setQuery("");
@@ -65,12 +75,17 @@ export function useShellCommandPaletteModel({
     }
   }, [isOpen]);
 
+  // Registry and query changes can shrink the result set. Clamp selection
+  // here so Enter can never address a stale row index.
   useEffect(() => {
     setSelectedIndex((currentIndex) =>
       items.length === 0 ? 0 : Math.min(currentIndex, items.length - 1),
     );
   }, [items.length]);
 
+  // Execution has three mutually exclusive paths: synthetic back rows move
+  // up, parents drill down, and leaf commands close the palette before the
+  // host runs the handler. Presentation never needs to distinguish them.
   function executeItem(item: ShellCommandPaletteItem | undefined) {
     if (!item) {
       return;
@@ -94,6 +109,9 @@ export function useShellCommandPaletteModel({
     void host.runCommand(item.command.id);
   }
 
+  // Keyboard behavior belongs beside selection state, not inside a visual
+  // list component. Arrow keys stay bounded; Left and empty Backspace leave
+  // a drill; Escape leaves the drill before it closes the whole palette.
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -109,7 +127,10 @@ export function useShellCommandPaletteModel({
       return;
     }
 
-    if (event.key === "ArrowRight" && items[selectedIndex]?.command.children?.length) {
+    if (
+      event.key === "ArrowRight" &&
+      items[selectedIndex]?.command.children?.length
+    ) {
       event.preventDefault();
       executeItem(items[selectedIndex]);
       return;
@@ -165,6 +186,9 @@ export function useShellCommandPaletteModel({
   };
 }
 
+// Search is delegated to the registry so ranking, recent history, context
+// gates, and dynamic sources remain authoritative. Drilling only changes
+// which registry query supplies the rows and prepends one synthetic back row.
 export function buildCommandItems(
   host: ShellHost,
   query: string,
@@ -184,6 +208,8 @@ export function buildCommandItems(
     .map((result) => commandToItem(result.command, result));
 }
 
+// Preserve first-seen group order from ranked results. Sorting again here
+// would quietly discard ranking decisions already made by the registry.
 export function groupCommandItems(items: ShellCommandPaletteItem[]) {
   const groups: ShellCommandPaletteGroup[] = [];
 

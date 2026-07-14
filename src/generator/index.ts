@@ -1,3 +1,9 @@
+// App Foundry owns the mechanics every generator must get right—portable
+// naming, path containment, overwrite policy, dry runs, and deterministic
+// writes—while a UI kit or product owns the recipe that decides what files
+// and imports to emit. Separating mechanism from recipe lets presentation
+// packages accelerate app creation without branding the framework itself.
+
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -39,10 +45,10 @@ export type ScopedNameParts = NameParts & {
   rawName: string;
 };
 
-/**
- * Executes a UI-kit-owned recipe with framework-owned path containment,
- * overwrite protection, dry-run behavior, and filesystem writes.
- */
+// Execute a UI-kit-owned recipe with framework-owned safety. The recipe is
+// evaluated before any writes, then every proposed path is resolved inside
+// `cwd`; one invalid plan therefore fails before it can partially escape the
+// requested project root.
 export async function runGenerator(
   definition: GeneratorDefinition,
   name: string,
@@ -54,6 +60,10 @@ export async function runGenerator(
   const files = build(name, dir);
   const written: GeneratedFile[] = [];
 
+  // Process in recipe order so dry-run output and real writes describe the
+  // same deterministic plan. Existing files are errors unless force was an
+  // explicit caller choice; silent merging would make generated code depend
+  // on whatever happened to be on disk.
   for (const file of files) {
     const targetPath = resolveInside(cwd, file.relativePath);
     const existed = await fileExists(targetPath);
@@ -84,7 +94,13 @@ export async function runGenerator(
   return written;
 }
 
-export function toScopedNameParts(value: string, label: string): ScopedNameParts {
+// Scoped names make ownership visible in keys and filenames. Splitting only
+// on the first app segment lets feature names retain nested punctuation while
+// normalizing to one stable `<app>.<feature>` identity.
+export function toScopedNameParts(
+  value: string,
+  label: string,
+): ScopedNameParts {
   const [appId, ...rest] = value.split(/[./]/).filter(Boolean);
   const rawName = rest.join("-");
 
@@ -102,6 +118,8 @@ export function toScopedNameParts(value: string, label: string): ScopedNameParts
   };
 }
 
+// Produce all naming forms once so recipes cannot drift between hand-written
+// camel, Pascal, title, and kebab transformations.
 export function toNameParts(value: string): NameParts {
   const kebab = toKebab(value);
 
@@ -145,6 +163,8 @@ function resolveInside(cwd: string, relativePath: string): string {
   const targetPath = path.resolve(cwd, relativePath);
   const relative = path.relative(cwd, targetPath);
 
+  // `path.relative` is the cross-platform containment check: traversal and
+  // absolute paths both remain outside after resolution and are rejected.
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`Refusing to write outside ${cwd}: ${relativePath}`);
   }

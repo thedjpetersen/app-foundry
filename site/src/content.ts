@@ -1,4 +1,5 @@
 import pagesData from "../pages.json";
+import searchIndexData from "../generated/search-index.json";
 import architecture from "../../docs/architecture.md?raw";
 import contracts from "../../docs/contracts.md?raw";
 import generators from "../../docs/generators.md?raw";
@@ -35,7 +36,19 @@ export type SourceModule = Page & {
   surface: string;
 };
 
+export type SearchEntry = {
+  id: string;
+  kind: "Guide" | "Module" | "Section" | "Symbol";
+  label: string;
+  context: string;
+  description: string;
+  slug: string;
+  hash?: string;
+  terms: string;
+};
+
 export const pages = pagesData as Page[];
+export const searchIndex = searchIndexData as SearchEntry[];
 
 export const markdownBySlug: Record<string, string> = {
   "": overview,
@@ -142,6 +155,58 @@ export function hrefFor(slug: string) {
   return `${base}${slug ? `${slug}/` : ""}`;
 }
 
+export function searchDocs(query: string, limit = 8): SearchEntry[] {
+  const normalizedQuery = normalizeSearchText(query);
+  const tokens = normalizedQuery.split(" ").filter(Boolean);
+
+  if (tokens.length === 0) return [];
+
+  return searchIndex
+    .map((entry) => {
+      const label = normalizeSearchText(entry.label);
+      const context = normalizeSearchText(entry.context);
+      const description = normalizeSearchText(entry.description);
+      const terms = normalizeSearchText(entry.terms);
+      const haystack = `${label} ${context} ${description} ${terms}`;
+
+      if (!tokens.every((token) => haystack.includes(token))) {
+        return { entry, score: 0 };
+      }
+
+      let score = 0;
+      if (label === normalizedQuery) score += 120;
+      if (label.startsWith(normalizedQuery)) score += 70;
+      if (label.includes(normalizedQuery)) score += 45;
+      if (context.includes(normalizedQuery)) score += 22;
+      if (description.includes(normalizedQuery)) score += 14;
+      score += tokens.reduce(
+        (total, token) =>
+          total +
+          (label.includes(token) ? 12 : 0) +
+          (context.includes(token) ? 5 : 0) +
+          (description.includes(token) ? 3 : 0) +
+          (terms.includes(token) ? 1 : 0),
+        0,
+      );
+
+      return { entry, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        searchKindRank(left.entry.kind) - searchKindRank(right.entry.kind) ||
+        left.entry.label.localeCompare(right.entry.label),
+    )
+    .slice(0, limit)
+    .map(({ entry }) => entry);
+}
+
+export function searchEntryHref(entry: SearchEntry) {
+  const pageHref = hrefFor(entry.slug);
+  return entry.hash ? `${pageHref}#${entry.hash}` : pageHref;
+}
+
 export function normalizeMarkdownLinks(markdown: string) {
   return markdown.replace(/\]\(\.\/([^)]*)\)/g, (_, target: string) => {
     const slug = target.replace(/^\/+|\/+$/g, "");
@@ -166,4 +231,15 @@ export function slugify(value: string) {
 
 function stripMarkdown(value: string) {
   return value.replace(/[`*_]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1");
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function searchKindRank(kind: SearchEntry["kind"]) {
+  return { Guide: 0, Module: 1, Section: 2, Symbol: 3 }[kind];
 }

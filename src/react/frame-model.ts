@@ -1,3 +1,9 @@
+// The frame model is the smallest useful projection of `ShellHost` for a
+// product shell: the app catalog, the app matching the current location,
+// and active-app contributions grouped into their four top-nav slots. It
+// contains no Astryx, DOM, or layout decisions, so different UI kits can
+// render identical host state without reimplementing host queries.
+
 import { useMemo } from "react";
 import type {
   ShellAppManifest,
@@ -10,13 +16,12 @@ import { useHostVersion } from "./react-bindings.js";
 export type ShellFrameModel = {
   activeApp?: ShellAppManifest;
   apps: ShellAppManifest[];
-  topNavMounts: Record<
-    ShellTopNavMountArea,
-    ShellTopNavMountContribution[]
-  >;
+  topNavMounts: Record<ShellTopNavMountArea, ShellTopNavMountContribution[]>;
 };
 
-/** Presentation-neutral state consumed by every UI Kit's shell frame. */
+// `useHostVersion` is the subscription edge. The returned number is not
+// business data; including it in the memo dependencies simply invalidates
+// the projection whenever manifests, activation, or nav mounts change.
 export function useShellFrameModel({
   currentPathname,
   host,

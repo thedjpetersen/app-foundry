@@ -24,12 +24,52 @@ for (const page of pages) {
   for (const marker of [
     expectedTitle,
     '<app-foundry-docs id="root">',
+    '<link rel="icon" href="/app-foundry/favicon.svg" type="image/svg+xml" />',
     `https://thedjpetersen.github.io/app-foundry/${page.slug ? `${page.slug}/` : ""}`,
     "/app-foundry/assets/",
   ]) {
     if (!html.includes(marker)) {
       throw new Error(`${pagePath} is missing ${marker}`);
     }
+  }
+}
+
+const favicon = await readFile(path.join(output, "favicon.svg"), "utf8");
+for (const marker of [
+  'viewBox="0 0 32 32"',
+  'rx="9"',
+  'aria-label="App Foundry"',
+]) {
+  if (!favicon.includes(marker)) {
+    throw new Error(`Approachable favicon is missing ${marker}`);
+  }
+}
+
+const searchIndex = JSON.parse(
+  await readFile(
+    path.join(root, "site", "generated", "search-index.json"),
+    "utf8",
+  ),
+);
+const searchKinds = new Set(searchIndex.map(({ kind }) => kind));
+
+if (searchIndex.length < 200) {
+  throw new Error(`Search index is too shallow: ${searchIndex.length} entries`);
+}
+
+for (const kind of ["Guide", "Section", "Module", "Symbol"]) {
+  if (!searchKinds.has(kind)) {
+    throw new Error(`Search index is missing ${kind} entries`);
+  }
+}
+
+const moduleEntries = searchIndex.filter(({ kind }) => kind === "Module");
+for (const entry of moduleEntries) {
+  const commentaryWordCount = entry.terms.split(/\s+/).filter(Boolean).length;
+  if (commentaryWordCount < 40) {
+    throw new Error(
+      `${entry.context} needs stronger annotated commentary (${commentaryWordCount} words)`,
+    );
   }
 }
 
@@ -71,6 +111,8 @@ for (const marker of [
   "Exported symbols",
   "src/core/host.ts",
   "src/react/presentation-adapter.ts",
+  "Search docs and source",
+  "No guide, section, module, or symbol matches",
 ]) {
   if (!javascript.includes(marker)) {
     throw new Error(`Compiled documentation application is missing ${marker}`);
@@ -105,7 +147,7 @@ for (const [foreground, background, label] of contrastPairs) {
 }
 
 console.log(
-  `Checked ${pages.length} Astryx routes, ${sourcePages.length} annotated modules, compiled tokens, package boundaries, and source contrast.`,
+  `Checked ${pages.length} Astryx routes, ${sourcePages.length} annotated modules, ${searchIndex.length} search entries, compiled tokens, package boundaries, and source contrast.`,
 );
 
 function contrast(foreground, background) {

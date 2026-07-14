@@ -14,6 +14,7 @@ import {
   SideNavItem,
   SideNavSection,
   Text,
+  TextInput,
   TopNav,
   TopNavHeading,
   TopNavItem,
@@ -28,7 +29,16 @@ import {
   spacingVars,
 } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
-import { Children, Fragment, isValidElement, type ReactNode } from "react";
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { collectExportedSymbols, parseAnnotatedSections } from "./annotated";
 import {
   collectHeadings,
@@ -36,6 +46,8 @@ import {
   markdownBySlug,
   normalizeMarkdownLinks,
   pages,
+  searchDocs,
+  searchEntryHref,
   slugify,
   sourceModuleBySlug,
   sourceModules,
@@ -114,14 +126,19 @@ function TopNavigation({ current }: { current: Page }) {
         </>
       }
       endContent={
-        <Button
-          label="GitHub"
-          href={repositoryUrl}
-          target="_blank"
-          rel="noreferrer"
-          variant="ghost"
-          icon={<Icon icon="externalLink" size="sm" />}
-        />
+        <section {...stylex.props(styles.topNavActions)}>
+          <section {...stylex.props(styles.topSearch)}>
+            <DocsSearch hasShortcut />
+          </section>
+          <Button
+            label="GitHub"
+            href={repositoryUrl}
+            target="_blank"
+            rel="noreferrer"
+            variant="ghost"
+            icon={<Icon icon="externalLink" size="sm" />}
+          />
+        </section>
       }
     />
   );
@@ -133,6 +150,11 @@ function SideNavigation({ current }: { current: Page }) {
   return (
     <SideNav
       xstyle={styles.sideNav}
+      topContent={
+        <section {...stylex.props(styles.mobileSearch)}>
+          <DocsSearch isInline />
+        </section>
+      }
       footer={
         <Section variant="muted" padding={4} xstyle={styles.boundaryNote}>
           <VStack gap={1}>
@@ -163,6 +185,121 @@ function SideNavigation({ current }: { current: Page }) {
         </SideNavSection>
       ))}
     </SideNav>
+  );
+}
+
+function DocsSearch({
+  hasShortcut = false,
+  isInline = false,
+}: {
+  hasShortcut?: boolean;
+  isInline?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const results = useMemo(() => searchDocs(query), [query]);
+  const hasQuery = query.trim().length > 0;
+
+  useEffect(() => {
+    if (!hasShortcut) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+
+      if (
+        event.key === "Escape" &&
+        document.activeElement === inputRef.current
+      ) {
+        setQuery("");
+        inputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasShortcut]);
+
+  return (
+    <section
+      role="search"
+      {...stylex.props(styles.searchRoot, isInline && styles.searchRootInline)}
+    >
+      <TextInput
+        ref={inputRef}
+        label="Search documentation"
+        isLabelHidden
+        value={query}
+        onChange={setQuery}
+        placeholder="Search docs and source"
+        startIcon="search"
+        hasClear
+        htmlName={isInline ? "mobileDocsSearch" : "docsSearch"}
+        size="sm"
+        width="100%"
+      />
+      {hasQuery ? (
+        <Section
+          variant="section"
+          padding={0}
+          aria-label="Documentation search results"
+          aria-live="polite"
+          xstyle={[
+            styles.searchResults,
+            isInline && styles.searchResultsInline,
+          ]}
+        >
+          {results.length > 0 ? (
+            <ul {...stylex.props(styles.searchList)}>
+              {results.map((result) => (
+                <li key={result.id} {...stylex.props(styles.searchItem)}>
+                  <Link
+                    href={searchEntryHref(result)}
+                    isStandalone
+                    xstyle={styles.searchLink}
+                    onClick={() => setQuery("")}
+                  >
+                    {result.label}
+                  </Link>
+                  <Text type="supporting" color="secondary" maxLines={1}>
+                    {result.kind} · {result.context}
+                  </Text>
+                  {result.description ? (
+                    <Text
+                      as="p"
+                      display="block"
+                      type="supporting"
+                      color="secondary"
+                      maxLines={2}
+                    >
+                      {result.description}
+                    </Text>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Text
+              as="p"
+              display="block"
+              type="supporting"
+              color="secondary"
+              xstyle={styles.searchEmpty}
+            >
+              No guide, section, module, or symbol matches “{query}”.
+            </Text>
+          )}
+        </Section>
+      ) : null}
+    </section>
   );
 }
 
@@ -486,6 +623,66 @@ const OUTLINE_BREAK = "@media (min-width: 1240px)";
 
 const styles = stylex.create({
   docsShell: { backgroundColor: colorVars["--color-background-body"] },
+  topNavActions: {
+    alignItems: "center",
+    display: "flex",
+    gap: spacingVars["--spacing-2"],
+  },
+  topSearch: {
+    display: {
+      default: "none",
+      "@media (min-width: 1100px)": "block",
+    },
+    width: 260,
+  },
+  mobileSearch: {
+    display: {
+      default: "block",
+      "@media (min-width: 1100px)": "none",
+    },
+    padding: spacingVars["--spacing-3"],
+  },
+  searchRoot: {
+    minWidth: 0,
+    position: "relative",
+    width: "100%",
+    zIndex: 60,
+  },
+  searchRootInline: { zIndex: 1 },
+  searchResults: {
+    borderColor: colorVars["--color-border"],
+    borderRadius: radiusVars["--radius-container"],
+    borderStyle: "solid",
+    borderWidth: borderVars["--border-width"],
+    boxShadow: shadowVars["--shadow-high"],
+    insetInlineEnd: 0,
+    maxHeight: "min(520px, calc(100vh - 96px))",
+    overflowY: "auto",
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    width: 390,
+  },
+  searchResultsInline: {
+    boxShadow: "none",
+    marginBlockStart: spacingVars["--spacing-2"],
+    maxHeight: 420,
+    position: "static",
+    width: "100%",
+  },
+  searchList: { listStyle: "none", margin: 0, padding: 0 },
+  searchItem: {
+    borderBottomColor: colorVars["--color-border"],
+    borderBottomStyle: "solid",
+    borderBottomWidth: {
+      default: borderVars["--border-width"],
+      ":last-child": 0,
+    },
+    display: "grid",
+    gap: spacingVars["--spacing-1"],
+    padding: spacingVars["--spacing-3"],
+  },
+  searchLink: { fontWeight: 600 },
+  searchEmpty: { padding: spacingVars["--spacing-4"] },
   topNav: {
     backgroundColor: colorVars["--color-background-surface"],
     borderBottomColor: colorVars["--color-border"],

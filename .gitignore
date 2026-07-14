@@ -1,4 +1,5 @@
 dist/
 site/dist/
+site/generated/
 node_modules/
 *.tgz

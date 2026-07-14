@@ -1,3 +1,9 @@
+// This module translates the asynchronous App Module lifecycle into states
+// a React presentation can render safely. Activation, cancellation, route
+// props, and recovery remain framework responsibilities; a UI kit supplies
+// loading/empty/error visuals without racing the host or leaking an app's
+// resources after navigation.
+
 import {
   Component,
   useEffect,
@@ -43,11 +49,9 @@ export type UseShellAppOutletOptions = {
   workspace: WorkspaceContext;
 };
 
-/**
- * Activates one App Module and returns its presentation-neutral outlet state.
- * A UI Kit renders unavailable, loading, ready, and error states without
- * duplicating lifecycle or race handling.
- */
+// Activate one App Module and return its presentation-neutral outlet state.
+// A UI kit renders unavailable, loading, ready, and error states without
+// duplicating lifecycle or race handling.
 export function useShellAppOutlet({
   appId,
   host,
@@ -56,12 +60,18 @@ export function useShellAppOutlet({
   workspace,
 }: UseShellAppOutletOptions): ShellAppOutletState {
   const hostVersion = useHostVersion(host);
+  // The active instance changes independently of the manifest catalog. Read
+  // it through React's external-store contract so concurrent renders observe
+  // one coherent host snapshot.
   const activeApp = useSyncExternalStore(
     (listener) => host.subscribe(listener).dispose,
     () => host.activeApp(),
     () => host.activeApp(),
   );
 
+  // Navigation can supersede a lazy import before it resolves. Cleanup marks
+  // this request cancelled and deactivates by id; a late rejection therefore
+  // cannot tear down whichever app became active afterward.
   useEffect(() => {
     let isCancelled = false;
 
@@ -82,6 +92,9 @@ export function useShellAppOutlet({
     [appId, host, hostVersion],
   );
 
+  // A missing manifest and an unresolved activation are different product
+  // states. Keeping them separate lets presentation distinguish an invalid
+  // route from an app that is legitimately still loading.
   if (!manifest) {
     return { appId, status: "unavailable" };
   }
@@ -102,6 +115,8 @@ export function useShellAppOutlet({
       shell: host.getShell(),
       workspace,
     },
+    // Route changes reset an app error boundary even when the same module
+    // remains active, giving navigation a clean recovery surface.
     resetKey: `${manifest.id}:${route.pathname}`,
     status: "ready",
   };
@@ -130,7 +145,9 @@ type ShellAppBoundaryState = {
   resetKey: string;
 };
 
-/** Error isolation with UI rendering supplied at the Presentation Seam. */
+// Error isolation with UI rendering supplied at the Presentation Seam. The
+// boundary owns capture, reset, and reporting; `renderError` keeps recovery
+// visuals out of the framework.
 export class ShellAppBoundary extends Component<
   ShellAppBoundaryProps,
   ShellAppBoundaryState
@@ -157,9 +174,13 @@ export class ShellAppBoundary extends Component<
     this.props.onError?.(error, info);
 
     if (!this.props.onError) {
-      console.error(`Shell app "${this.props.appId}" failed to render.`, error, {
-        componentStack: info.componentStack,
-      });
+      console.error(
+        `Shell app "${this.props.appId}" failed to render.`,
+        error,
+        {
+          componentStack: info.componentStack,
+        },
+      );
     }
   }
 

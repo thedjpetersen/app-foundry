@@ -4,7 +4,7 @@
 
 export function requireD1Database<Env extends Record<string, unknown>>(
   env: Env,
-  binding: keyof Env & string
+  binding: keyof Env & string,
 ): D1Database {
   const database = env[binding];
 
@@ -21,7 +21,7 @@ export function requireD1Database<Env extends Record<string, unknown>>(
 // conditionally.
 export async function runD1Batch(
   database: D1Database,
-  statements: D1PreparedStatement[]
+  statements: D1PreparedStatement[],
 ): Promise<D1Result[]> {
   if (statements.length === 0) {
     return [];
@@ -30,6 +30,9 @@ export async function runD1Batch(
   return database.batch(statements);
 }
 
+// Preparing and binding in one call keeps SQL text next to its parameters
+// and returns the statement for composition into either `first`, `all`,
+// `run`, or a later `batch`. It deliberately does not hide D1's result types.
 export function prepareD1Statement(
   database: D1Database,
   sql: string,

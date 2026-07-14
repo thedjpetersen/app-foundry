@@ -1,3 +1,9 @@
+// Preferences have an ownership hierarchy, but a UI kit should not need to
+// understand how groups are resolved or which app is currently active. This
+// model turns the host registry into ordered ring groups plus one resilient
+// selection. Presentation decides whether those groups become a sidebar,
+// tabs, or another navigation pattern.
+
 import { useEffect, useMemo, useState } from "react";
 import type { ShellHost } from "../core/host.js";
 import type { PreferenceRing, SettingsGroup } from "../core/shell-sdk.js";
@@ -16,8 +22,10 @@ export type ShellPreferencesModel = {
   selectedGroup?: SettingsGroup;
 };
 
-/** Selection and grouping behavior shared by every UI Kit's preferences view. */
-export function useShellPreferencesModel(host: ShellHost): ShellPreferencesModel {
+// Selection and grouping behavior shared by every UI kit's preferences view.
+export function useShellPreferencesModel(
+  host: ShellHost,
+): ShellPreferencesModel {
   const groups = useSettingsGroups(host);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const activeAppId = host.getShell().context.get<string>("appActive");
@@ -26,6 +34,9 @@ export function useShellPreferencesModel(host: ShellHost): ShellPreferencesModel
     groups.find((group) => group.id === selectedGroupId) ?? preferredGroup;
   const groupsByRing = useMemo(() => groupSettingsByRing(groups), [groups]);
 
+  // Contributions can disappear when an app deactivates. If selection is no
+  // longer valid—or a newly active app has a more relevant group—move to the
+  // preferred group instead of leaving presentation with a dangling id.
   useEffect(() => {
     if (groups.length === 0) {
       setSelectedGroupId("");
@@ -52,8 +63,17 @@ export function useShellPreferencesModel(host: ShellHost): ShellPreferencesModel
   };
 }
 
-export function groupSettingsByRing(groups: SettingsGroup[]): SettingsRingGroup[] {
-  const orderedRings: PreferenceRing[] = ["platform", "product", "app", "feature"];
+// Ring order expresses the framework's ownership ladder. Empty rings are
+// omitted so a presentation never renders navigation with dead headings.
+export function groupSettingsByRing(
+  groups: SettingsGroup[],
+): SettingsRingGroup[] {
+  const orderedRings: PreferenceRing[] = [
+    "platform",
+    "product",
+    "app",
+    "feature",
+  ];
 
   return orderedRings
     .map((ring) => ({
@@ -63,6 +83,9 @@ export function groupSettingsByRing(groups: SettingsGroup[]): SettingsRingGroup[
     .filter((item) => item.groups.length > 0);
 }
 
+// Prefer the active app, then progressively broader ownership. This makes
+// opening settings feel local to the current task while still producing a
+// deterministic landing group when no app is active.
 export function preferredSettingsGroup(
   groups: SettingsGroup[],
   activeAppId?: string,
