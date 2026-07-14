@@ -1,35 +1,40 @@
 const PARAGRAPH_BREAK = "\0";
 const DECLARATION_PATTERN =
-  /^export (?:declare )?(?:abstract )?(?:async )?(?:function|class|const|let|type|interface|enum) ([A-Za-z_$][\w$]*)/;
+  /^\s*export (?:declare )?(?:abstract )?(?:async )?(?:function|class|const|let|type|interface|enum) ([A-Za-z_$][\w$]*)/;
 
-export function parseAnnotatedSections(raw) {
+export type AnnotatedSection = {
+  annotation: string[];
+  code: string;
+  startLine: number;
+  sectionStartLine: number;
+};
+
+export type ExportedSymbol = { name: string; line: number };
+
+export function parseAnnotatedSections(raw: string): AnnotatedSection[] {
   const lines = raw.replace(/\s+$/, "").split("\n");
-  const sections = [];
-  let annotation = [];
-  let code = [];
+  const sections: AnnotatedSection[] = [];
+  let annotation: string[] = [];
+  let code: string[] = [];
   let startLine = 1;
   let sectionStartLine = 1;
   let inBlockComment = false;
 
   const flush = () => {
-    while (code.length > 0 && code.at(-1).trim() === "") {
+    while (code.length > 0 && code.at(-1)?.trim() === "") {
       code.pop();
     }
 
-    const paragraphs = [];
+    const paragraphs: string[] = [];
 
     for (const line of annotation) {
-      if (line === "") {
-        continue;
-      }
-
+      if (line === "") continue;
       if (line === PARAGRAPH_BREAK) {
         paragraphs.push("");
         continue;
       }
 
       const last = paragraphs.length - 1;
-
       if (last >= 0 && paragraphs[last] !== "") {
         paragraphs[last] = `${paragraphs[last]} ${line}`;
       } else if (last >= 0) {
@@ -39,11 +44,9 @@ export function parseAnnotatedSections(raw) {
       }
     }
 
-    const merged = paragraphs.filter(Boolean);
-
-    if (merged.length > 0 || code.length > 0) {
+    if (paragraphs.some(Boolean) || code.length > 0) {
       sections.push({
-        annotation: merged,
+        annotation: paragraphs.filter(Boolean),
         code: code.join("\n"),
         startLine,
         sectionStartLine,
@@ -67,17 +70,10 @@ export function parseAnnotatedSections(raw) {
       }
 
       const stripped = stripCommentMarkers(trimmed);
-
-      if (stripped) {
-        annotation.push(stripped);
-      } else if (annotation.length > 0) {
-        annotation.push(PARAGRAPH_BREAK);
-      }
+      annotation.push(stripped || PARAGRAPH_BREAK);
 
       if (inBlockComment) {
-        if (trimmed.includes("*/")) {
-          inBlockComment = false;
-        }
+        if (trimmed.includes("*/")) inBlockComment = false;
       } else if (trimmed.startsWith("/*") && !trimmed.includes("*/")) {
         inBlockComment = true;
       }
@@ -87,18 +83,12 @@ export function parseAnnotatedSections(raw) {
     }
 
     if (trimmed === "" && code.length === 0) {
-      if (annotation.length > 0) {
-        annotation.push(PARAGRAPH_BREAK);
-      }
-
+      if (annotation.length > 0) annotation.push(PARAGRAPH_BREAK);
       startLine = lineNumber + 1;
       return;
     }
 
-    if (code.length === 0) {
-      startLine = lineNumber;
-    }
-
+    if (code.length === 0) startLine = lineNumber;
     code.push(line);
   });
 
@@ -106,17 +96,14 @@ export function parseAnnotatedSections(raw) {
   return splitLongSections(sections);
 }
 
-export function collectExportedSymbols(raw) {
-  return raw
-    .split("\n")
-    .map((line, index) => {
-      const match = line.match(DECLARATION_PATTERN);
-      return match ? { name: match[1], line: index + 1 } : undefined;
-    })
-    .filter(Boolean);
+export function collectExportedSymbols(raw: string): ExportedSymbol[] {
+  return raw.split("\n").flatMap((line, index) => {
+    const match = line.match(DECLARATION_PATTERN);
+    return match?.[1] ? [{ name: match[1], line: index + 1 }] : [];
+  });
 }
 
-function isAnnotationLine(trimmed) {
+function isAnnotationLine(trimmed: string) {
   return (
     trimmed.startsWith("//") ||
     trimmed.startsWith("/*") ||
@@ -126,7 +113,7 @@ function isAnnotationLine(trimmed) {
   );
 }
 
-function stripCommentMarkers(trimmed) {
+function stripCommentMarkers(trimmed: string) {
   return trimmed
     .replace(/^\/\*\*?/, "")
     .replace(/^\*\/?/, "")
@@ -135,16 +122,12 @@ function stripCommentMarkers(trimmed) {
     .trim();
 }
 
-function splitLongSections(sections) {
+function splitLongSections(sections: AnnotatedSection[]) {
   return sections.flatMap((section) => {
     const lines = section.code.split("\n");
+    if (lines.length <= 90) return section;
 
-    if (lines.length <= 90) {
-      return section;
-    }
-
-    const chunks = [];
-
+    const chunks: AnnotatedSection[] = [];
     for (let index = 0; index < lines.length; index += 90) {
       chunks.push({
         annotation: index === 0 ? section.annotation : [],
@@ -153,7 +136,6 @@ function splitLongSections(sections) {
         sectionStartLine: section.sectionStartLine + index,
       });
     }
-
     return chunks;
   });
 }

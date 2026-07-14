@@ -131,6 +131,8 @@ See [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/).
 - [Generator Engine](https://thedjpetersen.github.io/app-foundry/generators/)
 - [Annotated source](https://thedjpetersen.github.io/app-foundry/source/) — architectural commentary beside the public implementation
 
+The documentation application is built with Astryx. That presentation dependency is development-only: the published App Foundry package remains design-system-neutral and ships no Astryx code or CSS.
+
 ## Development
 
 ```sh

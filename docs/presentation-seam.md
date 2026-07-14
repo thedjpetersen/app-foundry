@@ -1,5 +1,7 @@
 # Presentation Seam
 
+This documentation application uses Astryx to present App Foundry's framework contracts. The choice demonstrates the seam without moving Astryx into the framework package: another host can implement the same contracts with another UI kit.
+
 ## Feature-level contract
 
 The Presentation Seam connects App Foundry to a UI kit. It models complete shell features instead of mirroring design-system primitives.

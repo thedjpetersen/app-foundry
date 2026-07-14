@@ -1,85 +1,117 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import pages from "./pages.json" with { type: "json" };
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const output = path.join(root, "site", "dist");
-const pages = JSON.parse(
-  await readFile(path.join(output, "pages.json"), "utf8"),
+const expectedTargets = new Set(
+  pages.map(({ slug }) => (slug ? `${slug}/index.html` : "index.html")),
 );
-const pagePaths = pages.map(({ slug }) =>
-  slug === "" ? "index.html" : `${slug}/index.html`,
-);
-const expectedTargets = new Set(pagePaths);
-const sourcePaths = pagePaths.filter((pagePath) =>
-  pagePath.startsWith("source/") && pagePath !== "source/index.html",
-);
+const sourcePages = pages.filter(({ slug }) => slug.startsWith("source/"));
 
-if (sourcePaths.length < 15) {
-  throw new Error(
-    `Expected at least 15 annotated source pages, found ${sourcePaths.length}`,
-  );
+if (sourcePages.length < 15) {
+  throw new Error(`Expected 15 annotated modules, found ${sourcePages.length}`);
 }
 
-for (const pagePath of pagePaths) {
+for (const page of pages) {
+  const pagePath = page.slug ? `${page.slug}/index.html` : "index.html";
   const html = await readFile(path.join(output, pagePath), "utf8");
-  const isAnnotatedSource = sourcePaths.includes(pagePath);
-  const required = isAnnotatedSource
-    ? [
-        "<main",
-        "<h1>",
-        "Exported symbols",
-        "annotated-page",
-        "code-line",
-        "Framework boundary",
-      ]
-    : ["<main", "<h1>", "On this page", "Framework boundary"];
+  const expectedTitle = page.slug
+    ? `<title>${page.label} · App Foundry</title>`
+    : "<title>App Foundry Docs</title>";
 
-  for (const marker of required) {
+  for (const marker of [
+    expectedTitle,
+    '<app-foundry-docs id="root">',
+    `https://thedjpetersen.github.io/app-foundry/${page.slug ? `${page.slug}/` : ""}`,
+    "/app-foundry/assets/",
+  ]) {
     if (!html.includes(marker)) {
       throw new Error(`${pagePath} is missing ${marker}`);
     }
   }
+}
 
-  for (const match of html.matchAll(/href="(\/app-foundry\/[^"#?]*)/g)) {
-    const relative = match[1].replace(/^\/app-foundry\//, "");
-    const target = relative === "" ? "index.html" : `${relative}index.html`;
+if (expectedTargets.size !== pages.length) {
+  throw new Error("Documentation routes must be unique");
+}
 
-    if (!relative.startsWith("assets/") && !expectedTargets.has(target)) {
-      throw new Error(`${pagePath} links to missing internal page ${match[1]}`);
-    }
+const assetNames = await readdir(path.join(output, "assets"));
+const css = (
+  await Promise.all(
+    assetNames
+      .filter((name) => name.endsWith(".css"))
+      .map((name) => readFile(path.join(output, "assets", name), "utf8")),
+  )
+).join("\n");
+const javascript = (
+  await Promise.all(
+    assetNames
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => readFile(path.join(output, "assets", name), "utf8")),
+  )
+).join("\n");
+
+for (const marker of [
+  "--color-background-body",
+  "--color-background-surface",
+  "--color-text-primary",
+  "--spacing-5",
+]) {
+  if (!css.includes(marker)) {
+    throw new Error(`Compiled Astryx styles are missing ${marker}`);
   }
 }
 
+for (const marker of [
+  "App Foundry documentation",
+  "Framework boundary",
+  "Annotated source",
+  "Exported symbols",
+  "src/core/host.ts",
+  "src/react/presentation-adapter.ts",
+]) {
+  if (!javascript.includes(marker)) {
+    throw new Error(`Compiled documentation application is missing ${marker}`);
+  }
+}
+
+const packageJson = JSON.parse(
+  await readFile(path.join(root, "package.json"), "utf8"),
+);
+
+if (!packageJson.devDependencies?.["@astryxdesign/core"]) {
+  throw new Error("The docs site must use the Astryx design system");
+}
+
+if (
+  packageJson.dependencies?.["@astryxdesign/core"] ||
+  packageJson.peerDependencies?.["@astryxdesign/core"]
+) {
+  throw new Error("Astryx must remain a docs-only dependency of App Foundry");
+}
+
 const contrastPairs = [
-  ["#17191f", "#ffffff", "light primary text"],
-  ["#5a606e", "#ffffff", "light secondary text"],
-  ["#2648c4", "#ffffff", "light links"],
-  ["#f4f6fb", "#171a21", "dark primary text"],
-  ["#aeb6c7", "#171a21", "dark secondary text"],
-  ["#a9bbff", "#171a21", "dark links"],
   ["#f4f6fb", "#1a2652", "annotated source code"],
   ["#b9c7f5", "#1a2652", "annotated source line numbers"],
 ];
 
 for (const [foreground, background, label] of contrastPairs) {
   const ratio = contrast(foreground, background);
-
   if (ratio < 4.5) {
     throw new Error(`${label} contrast is ${ratio.toFixed(2)}:1`);
   }
 }
 
 console.log(
-  `Checked ${pagePaths.length} pages, ${sourcePaths.length} annotated modules, internal navigation, and ${contrastPairs.length} contrast pairs.`,
+  `Checked ${pages.length} Astryx routes, ${sourcePages.length} annotated modules, compiled tokens, package boundaries, and source contrast.`,
 );
 
 function contrast(foreground, background) {
   const light = luminance(foreground);
   const dark = luminance(background);
-  const high = Math.max(light, dark);
-  const low = Math.min(light, dark);
-  return (high + 0.05) / (low + 0.05);
+  return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
 }
 
 function luminance(hex) {
@@ -88,10 +120,7 @@ function luminance(hex) {
     .match(/.{2}/g)
     .map((channel) => Number.parseInt(channel, 16) / 255)
     .map((channel) =>
-      channel <= 0.04045
-        ? channel / 12.92
-        : ((channel + 0.055) / 1.055) ** 2.4,
+      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
     );
-
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }

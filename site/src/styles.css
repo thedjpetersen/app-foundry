@@ -1,0 +1,29 @@
+html,
+body,
+app-foundry-docs {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background-body);
+  color: var(--color-text-primary);
+}
+
+app-foundry-docs {
+  display: block;
+}
+
+pre {
+  margin: 0;
+  overflow-x: auto;
+  padding-block: var(--spacing-5);
+  tab-size: 2;
+}
+
+pre code {
+  display: block;
+  font-family: var(--font-family-code);
+  font-size: 12px;
+  min-width: max-content;
+}

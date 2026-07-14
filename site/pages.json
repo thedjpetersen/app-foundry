@@ -1,0 +1,134 @@
+[
+  {
+    "slug": "",
+    "label": "Overview",
+    "group": "Start",
+    "description": "A design-system-neutral framework for independently developed App Modules."
+  },
+  {
+    "slug": "motivation",
+    "label": "Motivation",
+    "group": "Start",
+    "description": "How bounded applications limit compounding mistakes in LLM-assisted development."
+  },
+  {
+    "slug": "architecture",
+    "label": "Architecture",
+    "group": "Framework",
+    "description": "One durable framework, replaceable presentation, and independently owned App Modules."
+  },
+  {
+    "slug": "contracts",
+    "label": "Contracts",
+    "group": "Framework",
+    "description": "Manifests, activation, registries, and package-by-feature boundaries."
+  },
+  {
+    "slug": "presentation",
+    "label": "Presentation seam",
+    "group": "Framework",
+    "description": "The feature-level contract between App Foundry and an independent UI kit."
+  },
+  {
+    "slug": "generators",
+    "label": "Generators",
+    "group": "Framework",
+    "description": "Neutral generator mechanics with presentation-specific recipes layered above them."
+  },
+  {
+    "slug": "source",
+    "label": "Annotated source",
+    "group": "Source",
+    "description": "Commentary and repository source rendered together at the public framework boundary."
+  },
+  {
+    "slug": "source/core-host",
+    "label": "Host lifecycle",
+    "group": "Source",
+    "description": "Manifest registration, activation, navigation, disposal, and workspace aggregation."
+  },
+  {
+    "slug": "source/core-shell-sdk",
+    "label": "Shell SDK",
+    "group": "Source",
+    "description": "Commands, context, events, preferences, and disposable collaboration state."
+  },
+  {
+    "slug": "source/core-access-control",
+    "label": "Access control",
+    "group": "Source",
+    "description": "Capability declarations, grants, requirements, and access decisions."
+  },
+  {
+    "slug": "source/core-entities",
+    "label": "Workspace entities",
+    "group": "Source",
+    "description": "Cross-module entity kinds, sources, aggregation, mentions, and references."
+  },
+  {
+    "slug": "source/core-importmap",
+    "label": "Import maps",
+    "group": "Source",
+    "description": "Import-map generation and installation for independently shipped modules."
+  },
+  {
+    "slug": "source/react-presentation-adapter",
+    "label": "Presentation adapter",
+    "group": "Source",
+    "description": "The feature-level frame, palette, preferences, outlet, and error-boundary seam."
+  },
+  {
+    "slug": "source/react-frame-model",
+    "label": "Frame model",
+    "group": "Source",
+    "description": "Headless navigation and shell state consumed by a presentation adapter."
+  },
+  {
+    "slug": "source/react-command-palette-model",
+    "label": "Command palette model",
+    "group": "Source",
+    "description": "Presentation-neutral command search, selection, and execution state."
+  },
+  {
+    "slug": "source/react-preferences-model",
+    "label": "Preferences model",
+    "group": "Source",
+    "description": "Headless grouped settings and resolved-source inspection."
+  },
+  {
+    "slug": "source/react-app-runtime",
+    "label": "App runtime",
+    "group": "Source",
+    "description": "React bindings for activating, rendering, and disposing App Modules."
+  },
+  {
+    "slug": "source/worker-http",
+    "label": "HTTP helpers",
+    "group": "Source",
+    "description": "Explicit routes, JSON responses, request parsing, health, and asset fallbacks."
+  },
+  {
+    "slug": "source/worker-access-guard",
+    "label": "Access guard",
+    "group": "Source",
+    "description": "Request-bound capability checks and denied-response behavior."
+  },
+  {
+    "slug": "source/worker-d1",
+    "label": "D1 helpers",
+    "group": "Source",
+    "description": "Binding guards, prepared statements, and small batch helpers."
+  },
+  {
+    "slug": "source/worker-short-links",
+    "label": "Short links",
+    "group": "Source",
+    "description": "Unbiased short-code generation and redirect-route composition."
+  },
+  {
+    "slug": "source/generator",
+    "label": "Generator engine",
+    "group": "Source",
+    "description": "Naming, path containment, overwrite protection, dry runs, and deterministic writes."
+  }
+]
