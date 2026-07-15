@@ -19,6 +19,7 @@ export type ShellCommandPaletteItem = {
   group: string;
   id: string;
   isBackItem?: boolean;
+  isApproximate?: boolean;
   label: string;
   result?: RankedCommandResult;
   shortcut?: CommandShortcut;
@@ -35,6 +36,7 @@ export type ShellCommandPaletteModel = {
   groups: ShellCommandPaletteGroup[];
   handleKeyDown: (event: KeyboardEvent) => void;
   isDrilling: boolean;
+  isApproximateResults: boolean;
   items: ShellCommandPaletteItem[];
   placeholder: string;
   query: string;
@@ -58,10 +60,18 @@ export function useShellCommandPaletteModel({
   const [query, setQuery] = useState("");
   const [drillParent, setDrillParent] = useState<CommandContribution>();
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const items = useMemo(
+  const exactItems = useMemo(
     () => buildCommandItems(host, query, drillParent),
     [drillParent, host, query, visibleCommands],
   );
+  const approximateItems = useMemo(
+    () =>
+      exactItems.length === 0 && !drillParent && query.trim().length > 1
+        ? buildApproximateCommandItems(host, query)
+        : [],
+    [drillParent, exactItems.length, host, query, visibleCommands],
+  );
+  const items = exactItems.length > 0 ? exactItems : approximateItems;
   const groups = useMemo(() => groupCommandItems(items), [items]);
 
   // Opening is a fresh search session. Closing also exits any child-command
@@ -179,6 +189,7 @@ export function useShellCommandPaletteModel({
     groups,
     handleKeyDown,
     isDrilling: drillParent != null,
+    isApproximateResults: exactItems.length === 0 && approximateItems.length > 0,
     items,
     placeholder: drillParent
       ? `Search ${drillParent.title} actions`
@@ -187,6 +198,101 @@ export function useShellCommandPaletteModel({
     selectedIndex,
     setQuery,
   };
+}
+
+// Approximation is intentionally a fallback over the same visible registry.
+// It never displaces an exact ranked result and never bypasses context gates.
+export function buildApproximateCommandItems(
+  host: ShellHost,
+  query: string,
+  limit = 3,
+): ShellCommandPaletteItem[] {
+  const seen = new Set<string>();
+
+  return host
+    .paletteItems()
+    .map((command) => ({ command, score: approximateCommandScore(command, query) }))
+    .filter(({ command, score }) => {
+      if (seen.has(command.id) || score < 0.42) {
+        return false;
+      }
+      seen.add(command.id);
+      return true;
+    })
+    .sort((left, right) => right.score - left.score || left.command.title.localeCompare(right.command.title))
+    .slice(0, limit)
+    .map(({ command }) => ({
+      id: command.id,
+      label: command.title,
+      command,
+      description: command.description ?? command.id,
+      group: "Close matches",
+      isApproximate: true,
+      shortcut: command.shortcut,
+    }));
+}
+
+function approximateCommandScore(command: CommandContribution, query: string) {
+  const queryTokens = tokenizeForApproximation(query);
+  const titleTokens = tokenizeForApproximation(command.title);
+  const supportingTokens = tokenizeForApproximation(
+    [command.category, command.description, ...(command.keywords ?? [])]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  if (queryTokens.length === 0 || titleTokens.length === 0) {
+    return 0;
+  }
+
+  const tokenScores = queryTokens.map((queryToken) => {
+    const titleScore = Math.max(
+      0,
+      ...titleTokens.map((candidate) => tokenSimilarity(queryToken, candidate)),
+    );
+    const supportingScore = Math.max(
+      0,
+      ...supportingTokens.map((candidate) => tokenSimilarity(queryToken, candidate) * 0.72),
+    );
+    return Math.max(titleScore, supportingScore);
+  });
+
+  return tokenScores.reduce((total, score) => total + score, 0) / tokenScores.length;
+}
+
+function tokenizeForApproximation(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1);
+}
+
+function tokenSimilarity(left: string, right: string) {
+  if (left === right) return 1;
+  if (left.length > 2 && (left.startsWith(right) || right.startsWith(left))) return 0.82;
+
+  const longest = Math.max(left.length, right.length);
+  if (longest === 0 || Math.abs(left.length - right.length) > Math.ceil(longest / 2)) return 0;
+
+  return 1 - levenshteinDistance(left, right) / longest;
+}
+
+function levenshteinDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[right.length] ?? 0;
 }
 
 // Decision: Search is delegated to the registry so ranking, recent history, context
