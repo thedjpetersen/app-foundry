@@ -260,6 +260,10 @@ function approximateCommandScore(command: CommandContribution, query: string) {
   return tokenScores.reduce((total, score) => total + score, 0) / tokenScores.length;
 }
 
+// Decision: Approximate matching is token-based rather than whole-string
+// matching so a typo in one term does not erase strong evidence from the
+// rest of a multi-word query. One-character tokens are intentionally ignored
+// because their edit-distance scores are too noisy for command discovery.
 function tokenizeForApproximation(value: string) {
   return value
     .toLowerCase()
@@ -277,6 +281,10 @@ function tokenSimilarity(left: string, right: string) {
   return 1 - levenshteinDistance(left, right) / longest;
 }
 
+// Invariant: The edit-distance helper remains deterministic and allocation-
+// bounded by the candidate token length. Palette registries are small, and
+// the fallback only evaluates after exact search returns no results, so this
+// straightforward dynamic-programming pass favors auditability over caching.
 function levenshteinDistance(left: string, right: string) {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
 
